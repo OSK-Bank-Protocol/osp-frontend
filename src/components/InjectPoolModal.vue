@@ -216,6 +216,9 @@ export default {
       const allowanceNum = parseFloat(this.oskAllowance);
 
       if (this.isApproving) {
+        // Change text if we are polling vs just approving? 
+        // For simplicity, just keep "Approving..." or maybe "Verifying..."
+        // But "Approving..." covers the whole process.
         return { text: this.t('inject.approving'), action: 'approving', disabled: true };
       }
       
@@ -416,12 +419,37 @@ export default {
           this.isApproving = true;
           const success = await approveOsk();
           if (success) {
-            showToast(this.t('inject.approveSuccess'));
-            await this.fetchOskAllowance();
+            showToast(this.t('toast.txSent'));
+            
+            // Poll for allowance update
+            let attempts = 0;
+            const maxAttempts = 20; // 20 * 3s = 60s max
+            const pollInterval = setInterval(async () => {
+                attempts++;
+                await this.fetchOskAllowance();
+                const currentAllowance = parseFloat(this.oskAllowance);
+                const requiredAmount = parseFloat(this.amount);
+                
+                if (currentAllowance >= requiredAmount) {
+                    clearInterval(pollInterval);
+                    this.isApproving = false;
+                    showToast(this.t('inject.approveSuccess'));
+                } else if (attempts >= maxAttempts) {
+                    clearInterval(pollInterval);
+                    this.isApproving = false;
+                    // If time out, just let user try again or maybe it's just slow
+                    // Maybe verify one last time?
+                }
+            }, 3000);
+            
+            // Note: We keep isApproving = true until confirmed or timeout
+            // But we should probably have a "Verifying..." text state?
+            // For now, let's keep button spinning.
+            return; 
           } else {
             showToast(this.t('inject.approveFailed'));
+            this.isApproving = false;
           }
-          this.isApproving = false;
           break;
         case 'next_step':
           console.log("[注入资产弹窗] 执行操作: 进入下一步 -> 确认推荐人");
