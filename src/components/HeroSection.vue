@@ -230,7 +230,18 @@ const shareFriendLink = async () => {
     showToast(t('toast.connectWalletFirst'));
     return;
   }
-  // Removed logic checking for referrer before opening modal
+  
+  // Check if user has no referrer or has the specific "unbound" referrer address (same check as Friends Contribution)
+  const referrerAddress = await getReferrer();
+  const invalidReferrerAddress = 'T9yD14Nj9j7xAB4dbGeiX9h8unkKHxuWwb';
+  
+  if (!referrerAddress || 
+      referrerAddress === invalidReferrerAddress || 
+      referrerAddress.startsWith('0x000')) {
+      showToast(t('toast.stakeAndBindFirst'));
+      return;
+  }
+
   const referralLink = `${window.location.origin}?ref=${walletState.address}`;
   emits('open-share-friend-modal', { referralLink });
 };
