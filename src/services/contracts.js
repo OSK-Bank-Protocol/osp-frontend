@@ -645,7 +645,12 @@ const getExpectedOSPAmount = async (oskAmountIn) => {
 
   try {
     // TronWeb call response is usually an array for multi-return
-    console.log(`[Router Debug] Calling getAmountsOut with amountIn: ${oskAmountIn}, path: [${oskAddress}, ${ospAddress}]`);
+    const routerAddress = routerContract.address;
+    const path = [oskAddress, ospAddress];
+    console.log(`[Router Debug] Contract Address: ${routerAddress}`);
+    console.log(`[Router Debug] Method: getAmountsOut`);
+    console.log(`[Router Debug] Params - amountIn: ${oskAmountIn}, path: ${JSON.stringify(path)}`);
+    
     let amountsOut;
     try {
         amountsOut = await routerContract.getAmountsOut(oskAmountIn, [oskAddress, ospAddress]).call();
@@ -687,7 +692,8 @@ const getExpectedOSPAmount = async (oskAmountIn) => {
     }
 
     console.log(`[Router Debug] Extracted outAmount:`, outAmount ? outAmount.toString() : "null");
-    return window.tronWeb.BigNumber(outAmount);
+    // Ensure we convert to string first to avoid BigNumber constructor issues with complex objects
+    return window.tronWeb.BigNumber(outAmount.toString());
   } catch (error) {
     console.error("[Router Debug] getAmountsOut error:", error);
     return window.tronWeb ? new window.tronWeb.BigNumber(0) : 0n;
@@ -795,21 +801,9 @@ export const stakeWithInviter = async (amount, stakeIndex, parentAddress) => {
     console.log("Staking Final Params:", params);
 
     // DEBUG: Show debug info via AlertModal for verification
-    // Helper to safely stringify BigNumbers/BigInts
-    const safeStringify = (obj) => {
-        return JSON.stringify(obj, (key, value) => 
-            typeof value === 'bigint' ? value.toString() : (value && value._isBigNumber ? value.toString() : value)
-        , 2);
-    };
-
-    let rawRouterOutputStr = "N/A";
-    try {
-        rawRouterOutputStr = safeStringify(walletState.lastRouterRawOutput);
-    } catch (e) { rawRouterOutputStr = String(walletState.lastRouterRawOutput); }
-
     walletState.debugInfo = {
-        title: "Debug: Slippage Calculation",
-        message: `[Router Raw Output]:\n${rawRouterOutputStr}\n\n[Router AmountOut Parsed]: ${expectedOSP.toString()}\n\n[Calculated minOut (90%)]: ${amountOutMin}\n\n[Final Params]:\n${JSON.stringify(params, null, 2)}`
+        title: "Debug: Slippage & Params",
+        message: `[Router Expected OSP]: ${expectedOSP.toString()}\n[Calculated minOut (10% Slippage)]: ${amountOutMin}\n\n[Contract Params]:\n${JSON.stringify(params, null, 2)}`
     };
 
     if (params.amount === "NaN" || params.minOut === "NaN") {
@@ -851,6 +845,15 @@ export const stakeWithInviter = async (amount, stakeIndex, parentAddress) => {
           errorMessage = JSON.stringify(error);
           rawError = errorMessage;
       }
+    }
+
+    // Check for user cancellation
+    if (errorMessage && (
+        errorMessage.includes("Confirmation declined by user") || 
+        errorMessage.includes("User rejected") ||
+        errorMessage.includes("cancelled by user")
+    )) {
+        return { success: false, cancelled: true };
     }
     
     return { success: false, error: errorMessage, rawError: rawError };

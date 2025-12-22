@@ -56,5 +56,5 @@ export const SINGLE_PURCHASE_LIMIT = 3.3333;
  * Disable console logs in production
  * Set to true to disable console.log/debug/info in production environment
  */
-export const DISABLE_CONSOLE_IN_PROD = true;
+export const DISABLE_CONSOLE_IN_PROD = false;
 
