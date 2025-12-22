@@ -224,23 +224,15 @@ export default {
       const result = await stakeWithInviter(amount, duration, parentAddress);
 
       // Check if there is debug info from stakeWithInviter
+      /*
       if (this.walletState.debugInfo) {
           this.alertTitle = this.walletState.debugInfo.title;
           this.alertMessage = this.walletState.debugInfo.message;
           this.isAlertModalVisible = true;
           // Clear it so it doesn't persist
           delete this.walletState.debugInfo;
-          // Wait for user to close alert before proceeding? 
-          // Actually, standard alert modal doesn't block execution flow in JS unless we promisify it.
-          // But here we just want to show it. The transaction might be prompting in background or failed.
-          
-          // If result is success, we might want to reload. But if we show debug, user might want to see it.
-          // Let's rely on the fact that if success, we reload after 2000ms.
-          // If failed, we overwrite the alert below? Yes.
-          // To support "Show debug THEN show result", we need to handle the alert closing.
-          // But user asked to show debug info "when clicking stake".
-          // The current flow shows it immediately.
       }
+      */
 
       if (result.success) {
         console.log("[指挥官] 质押交易成功");
@@ -248,12 +240,18 @@ export default {
         // Delay reload a bit more if debug was shown?
         setTimeout(() => window.location.reload(), 2000);
       } else {
+        if (result.cancelled) {
+             console.log("[指挥官] 用户取消交易");
+             this.isStaking = false;
+             return;
+        }
         console.error("[指挥官] 质押交易失败");
         // Only overwrite alert if it wasn't the debug info, OR append to it?
         // User wants to see the calculation values.
         // If it failed, the debug info is still useful.
         // Let's append failure message if debug info exists.
         
+        /*
         if (this.isAlertModalVisible) {
             this.alertTitle = t("toast.stakeFailed");
             const failMsg = result.rawError ? `${result.error}\n\n[Raw Error]: ${result.rawError}` : (result.error || t("toast.stakeFailedRetry"));
@@ -263,6 +261,8 @@ export default {
             this.alertMessage = result.rawError ? `${result.error}\n\n[Raw Error]: ${result.rawError}` : (result.error || t("toast.stakeFailedRetry"));
             this.isAlertModalVisible = true;
         }
+        */
+        showToast(result.error || t("toast.stakeFailed"));
       }
       this.isStaking = false;
     },
@@ -302,6 +302,7 @@ export default {
       const result = await stakeWithInviter(amount, duration, parentAddress);
       
       // Check if there is debug info from stakeWithInviter
+      /*
       if (this.walletState.debugInfo) {
           this.alertTitle = this.walletState.debugInfo.title;
           this.alertMessage = this.walletState.debugInfo.message;
@@ -309,14 +310,21 @@ export default {
           // Clear it so it doesn't persist
           delete this.walletState.debugInfo;
       }
+      */
       
       if (result.success) {
         console.log("[指挥官] 质押交易成功");
         showToast(t("toast.stakeSuccessRefresh"));
         setTimeout(() => window.location.reload(), 2000);
       } else {
+        if (result.cancelled) {
+             console.log("[指挥官] 用户取消交易");
+             this.isStaking = false;
+             return;
+        }
         console.error("[指挥官] 质押交易失败");
         
+        /*
         if (this.isAlertModalVisible) {
             this.alertTitle = t("toast.stakeFailed"); // Update title to indicate failure
             const failMsg = result.rawError ? `${result.error}\n\n[Raw Error]: ${result.rawError}` : (result.error || t("toast.stakeFailedRetry"));
@@ -326,6 +334,8 @@ export default {
             this.alertMessage = result.rawError ? `${result.error}\n\n[Raw Error]: ${result.rawError}` : (result.error || t("toast.stakeFailedRetry"));
             this.isAlertModalVisible = true;
         }
+        */
+        showToast(result.error || t("toast.stakeFailed"));
       }
       this.isStaking = false;
     }
