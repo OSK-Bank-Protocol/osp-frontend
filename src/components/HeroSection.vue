@@ -241,6 +241,17 @@ const openFriendsContribution = async () => {
         return;
     }
     const referrerAddress = await getReferrer();
+    
+    // Check if user has no referrer or has the specific "unbound" referrer address
+    const invalidReferrerAddress = 'T9yD14Nj9j7xAB4dbGeiX9h8unkKHxuWwb';
+    
+    if (!referrerAddress || 
+        referrerAddress === invalidReferrerAddress || 
+        referrerAddress.startsWith('0x000')) {
+        showToast(t('toast.stakeAndBindFirst'));
+        return;
+    }
+    
     emits('open-friends-contribution-modal', { referrerAddress });
 };
 
