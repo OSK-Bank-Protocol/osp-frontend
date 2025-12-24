@@ -47,7 +47,7 @@
                                     <span v-if="isLoading">{{ t('common.loading') }}</span>
                                     <span v-else>
                                         <AnimatedNumber :value="totalInvestmentValue" :decimals="2" />
-                                        <span class="unit">{{ t('common.osk') }}</span>
+                                        <span class="unit">{{ t('common.token') }}</span>
                                     </span>
                                 </div>
                             </div>
