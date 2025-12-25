@@ -46,7 +46,7 @@
           </div>
 
           <!-- Referrals Slider Section -->
-          <div class="referrals-panel" v-if="false">
+          <div class="referrals-panel">
             <div class="panel-header">
               <span class="panel-title">{{ t('share.myReferralsLabel') }}</span>
               <span class="badge mono">{{ formattedReferralCount }}</span>
@@ -126,7 +126,7 @@ import { onMounted, onUnmounted, computed, ref, watch } from 'vue';
 import { t } from '@/i18n';
 // import { getReferralsFromSubgraph } from '@/services/subgraph'; // Removed subgraph
 import { walletState } from '@/services/wallet';
-import { getTeamKpiByAddress, getUserStakedBalanceByAddress, formatUnits } from '@/services/contracts';
+import { getTeamKpiByAddress, getUserStakedBalanceByAddress, formatUnits, getDirectReferrals } from '@/services/contracts';
 
 export default {
   name: 'FriendsContributionModal',
@@ -212,14 +212,17 @@ export default {
         isLoadingReferrals.value = false;
         return;
       }
-      // Mock subgraph response for Tron as per previous logic which returned empty or mock data
-      // Since subgraph.js is deleted, we just set empty defaults or implement alternative logic if available
-      // const data = await getReferralsFromSubgraph(userAddress); 
-      const data = { referralCount: 0, referrals: [], estimatedDynamicRewards: '0' }; // Default fallback
       
-      referralCount.value = data.referralCount;
-      referrals.value = data.referrals;
-      // estimatedRewards.value = data.estimatedDynamicRewards; // Removed subgraph data
+      try {
+        const data = await getDirectReferrals(userAddress);
+        referralCount.value = data.count;
+        referrals.value = data.referrals;
+      } catch (e) {
+        console.error("Error fetching referrals:", e);
+        referralCount.value = 0;
+        referrals.value = [];
+      }
+      
       isLoadingReferrals.value = false;
     };
 

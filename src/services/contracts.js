@@ -3,6 +3,7 @@ import { APP_ENV } from './environment';
 import { toRaw } from 'vue';
 import { showToast } from '../services/notification';
 import { t } from '../i18n';
+import { ethers } from 'ethers';
 
 // --- Helper to get OSK decimals based on environment ---
 // TRC20 OSK uses 18 decimals
@@ -952,5 +953,132 @@ export const rewardOfSlot = async (id) => {
         return BigInt(res.toString());
     } catch (error) {
         return 0n;
+    }
+};
+
+// Helper function to call JSON-RPC eth_getStorageAt
+const getStorageAt = async (contractAddress, slotHex) => {
+    if (!window.tronWeb || !window.tronWeb.fullNode || !window.tronWeb.fullNode.host) return null;
+    
+    // Construct JSON-RPC URL
+    const baseUrl = window.tronWeb.fullNode.host;
+    const jsonRpcUrl = `${baseUrl}/jsonrpc`;
+    
+    // Address processing: Convert T-address to hex 0x-address
+    const addressHex = window.tronWeb.address.toHex(contractAddress);
+    const ethAddress = '0x' + addressHex.substring(2);
+    
+    const cleanSlot = slotHex.startsWith('0x') ? slotHex.substring(2) : slotHex;
+    const ethSlot = '0x' + cleanSlot;
+    
+    const payloadRpc = {
+        jsonrpc: "2.0",
+        method: "eth_getStorageAt",
+        params: [ethAddress, ethSlot, "latest"],
+        id: 1
+    };
+    
+    const headers = {
+        "Content-Type": "application/json"
+    };
+    
+    // Try to get API Key if available
+    headers["TRON-PRO-API-KEY"] = '95bf6fc6-2f62-4821-bf40-b5427d479f2a';
+
+    try {
+        const response = await fetch(jsonRpcUrl, {
+            method: 'POST',
+            headers: headers,
+            body: JSON.stringify(payloadRpc)
+        });
+        
+        if (!response.ok) return null;
+        const json = await response.json();
+        if (json.error) return null;
+        
+        return json.result; 
+    } catch (e) {
+        console.error(`[JSON-RPC] Network Error: ${e.message}`);
+        return null;
+    }
+};
+
+export const getDirectReferrals = async (referrerAddress) => {
+    if (!referralContract || !walletState.address) return { count: 0, referrals: [] };
+    
+    const env = APP_ENV === 'PROD' ? 'production' : 'development';
+    const contractAddress = contractAddresses.referral[env];
+
+    try {
+        // 1. Get Count from Contract View Function
+        let totalDirects = 0;
+        try {
+            const countBN = await referralContract.getReferralCount(referrerAddress).call();
+            totalDirects = Number(countBN.toString());
+        } catch (e) {
+            console.error("Failed to get referral count via contract call", e);
+            return { count: 0, referrals: [] };
+        }
+
+        if (totalDirects === 0) {
+            return { count: 0, referrals: [] };
+        }
+        
+        // 2. Manual Storage Reading for List
+        const CHILDREN_SLOT = 4; // Hardcoded slot for _children mapping
+        
+        const abiCoder = ethers.AbiCoder.defaultAbiCoder();
+        const slotEncoded = abiCoder.encode(["uint256"], [CHILDREN_SLOT]);
+        
+        const referrerHex = window.tronWeb.address.toHex(referrerAddress);
+        const referrerEthAddress = '0x' + referrerHex.substring(2);
+        
+        const keyEncoded = abiCoder.encode(["address"], [referrerEthAddress]);
+        
+        // Length Slot = keccak256(key . slot)
+        const lengthSlot = ethers.keccak256(ethers.concat([keyEncoded, slotEncoded]));
+        
+        // Array Start = keccak256(lengthSlot)
+        const arrayStartSlot = ethers.keccak256(lengthSlot);
+        const arrayStartBN = BigInt(arrayStartSlot); 
+        
+        const foundDirects = [];
+        const BATCH_SIZE = 20;
+        
+        for (let i = 0; i < totalDirects; i += BATCH_SIZE) {
+            const batchPromises = [];
+            const end = Math.min(i + BATCH_SIZE, totalDirects);
+            
+            for (let j = i; j < end; j++) {
+                const elementSlotBN = arrayStartBN + BigInt(j);
+                const elementSlot = '0x' + elementSlotBN.toString(16);
+                
+                batchPromises.push(
+                    getStorageAt(contractAddress, elementSlot).then(val => {
+                        if (!val) return null;
+                        const cleanVal = val.startsWith('0x') ? val.substring(2) : val;
+                        if (cleanVal.length < 40) return null;
+                        const addressLast40 = cleanVal.substring(cleanVal.length - 40);
+                        const addressHex = '41' + addressLast40;
+                        try {
+                            return window.tronWeb.address.fromHex(addressHex);
+                        } catch (e) { return null; }
+                    })
+                );
+            }
+            
+            const results = await Promise.all(batchPromises);
+            results.forEach(addr => {
+                if (addr) foundDirects.push(addr);
+            });
+            
+            if (end < totalDirects) await new Promise(r => setTimeout(r, 100));
+        }
+        
+        return { count: totalDirects, referrals: foundDirects };
+
+    } catch (error) {
+        console.error("getDirectReferrals error:", error);
+        return { count: 0, referrals: [] };
     }
 };
