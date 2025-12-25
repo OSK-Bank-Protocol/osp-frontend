@@ -126,7 +126,7 @@ import { onMounted, onUnmounted, computed, ref, watch } from 'vue';
 import { t } from '@/i18n';
 // import { getReferralsFromSubgraph } from '@/services/subgraph'; // Removed subgraph
 import { walletState } from '@/services/wallet';
-import { getTeamKpiByAddress, getUserStakedBalanceByAddress, formatUnits, getDirectReferrals } from '@/services/contracts';
+import { getTeamKpiByAddress, getUserStakedBalanceByAddress, formatUnits, getDirectReferralsCount, getDirectReferralAtIndex } from '@/services/contracts';
 
 export default {
   name: 'FriendsContributionModal',
@@ -138,17 +138,19 @@ export default {
   },
   setup(props, { emit }) {
     const referralCount = ref(0);
-    const referrals = ref([]);
+    const referrals = ref([]); // Stores loaded referrals. Index matches the visual index (0 to N-1). Gaps are undefined.
     const currentIndex = ref(0);
     const currentReferralKpiRaw = ref(null);
     const currentReferralBalanceRaw = ref(null);
     const isLoadingReferrals = ref(true);
+    const isLoadingCurrent = ref(false); // New loading state for individual items
     const estimatedRewards = ref('0');
 
     const close = () => {
       emit('close');
     };
-
+    
+    // ... existing teamId computed property ...
     const teamId = computed(() => {
       if (!props.referrerAddress || props.referrerAddress.length < 10) {
         return '';
@@ -171,11 +173,13 @@ export default {
     });
 
     const formattedKpi = computed(() => {
+      if (isLoadingCurrent.value) return '...';
       if (currentReferralKpiRaw.value === null) return '--';
       return parseFloat(currentReferralKpiRaw.value).toFixed(2);
     });
 
     const formattedBalance = computed(() => {
+      if (isLoadingCurrent.value) return '...';
       if (currentReferralBalanceRaw.value === null) return '--';
       return parseFloat(currentReferralBalanceRaw.value).toFixed(2);
     });
@@ -186,7 +190,9 @@ export default {
     });
 
     const currentReferralAddress = computed(() => {
-      if (referrals.value.length === 0) return '';
+      if (isLoadingCurrent.value) return 'Loading...';
+      if (!referrals.value[currentIndex.value]) return '--'; // Should ideally not happen if loaded
+      
       const address = referrals.value[currentIndex.value];
       const prefix = address.slice(0, 6);
       const suffix = address.slice(-4);
@@ -205,7 +211,8 @@ export default {
       }
     };
     
-    const fetchReferralData = async () => {
+    // 1. Initial Load: Get total count
+    const initReferralData = async () => {
       isLoadingReferrals.value = true;
       const userAddress = walletState.address;
       if (!userAddress) {
@@ -214,11 +221,17 @@ export default {
       }
       
       try {
-        const data = await getDirectReferrals(userAddress);
-        referralCount.value = data.count;
-        referrals.value = data.referrals;
+        const count = await getDirectReferralsCount(userAddress);
+        referralCount.value = count;
+        // Initialize array with empty slots
+        referrals.value = new Array(count).fill(null);
+        
+        // If we have referrals, load the first one immediately
+        if (count > 0) {
+             await loadReferralAtIndex(0);
+        }
       } catch (e) {
-        console.error("Error fetching referrals:", e);
+        console.error("Error fetching referral count:", e);
         referralCount.value = 0;
         referrals.value = [];
       }
@@ -226,32 +239,53 @@ export default {
       isLoadingReferrals.value = false;
     };
 
-    const fetchDataForCurrentReferral = async () => {
-      if (referrals.value.length === 0) return;
-      
-      try {
-        const address = referrals.value[currentIndex.value];
-        const [kpi, balance] = await Promise.all([
-          getTeamKpiByAddress(address),
-          getUserStakedBalanceByAddress(address)
-        ]);
-        currentReferralKpiRaw.value = kpi;
-        currentReferralBalanceRaw.value = balance;
-      } catch (error) {
-        console.error("Failed to fetch referral data:", error);
-        currentReferralKpiRaw.value = null;
-        currentReferralBalanceRaw.value = null;
-      }
+    // 2. Load specific referral data if not already loaded
+    const loadReferralAtIndex = async (index) => {
+        if (index < 0 || index >= referralCount.value) return;
+        
+        isLoadingCurrent.value = true;
+        const userAddress = walletState.address;
+        
+        try {
+            // Check if address is already loaded in our cache array
+            if (!referrals.value[index]) {
+                const address = await getDirectReferralAtIndex(userAddress, index);
+                if (address) {
+                    referrals.value[index] = address;
+                }
+            }
+            
+            // Now fetch KPI and Balance for this address
+            const address = referrals.value[index];
+            if (address) {
+                const [kpi, balance] = await Promise.all([
+                  getTeamKpiByAddress(address),
+                  getUserStakedBalanceByAddress(address)
+                ]);
+                currentReferralKpiRaw.value = kpi;
+                currentReferralBalanceRaw.value = balance;
+            } else {
+                // Failed to load address or empty slot
+                currentReferralKpiRaw.value = null;
+                currentReferralBalanceRaw.value = null;
+            }
+        } catch (error) {
+            console.error(`Failed to fetch data for referral index ${index}:`, error);
+            currentReferralKpiRaw.value = null;
+            currentReferralBalanceRaw.value = null;
+        } finally {
+            isLoadingCurrent.value = false;
+        }
     };
 
-    watch(currentIndex, fetchDataForCurrentReferral);
+    // Watch index changes to load data on demand
+    watch(currentIndex, async (newIndex) => {
+        await loadReferralAtIndex(newIndex);
+    });
 
     onMounted(async () => {
       document.body.style.overflow = 'hidden';
-      await fetchReferralData();
-      if (referralCount.value > 0) {
-        await fetchDataForCurrentReferral();
-      }
+      await initReferralData();
     });
 
     onUnmounted(() => {

@@ -1003,14 +1003,97 @@ const getStorageAt = async (contractAddress, slotHex) => {
     }
 };
 
+export const getDirectReferralAtIndex = async (referrerAddress, index) => {
+    if (!referralContract || !walletState.address) return null;
+
+    const env = APP_ENV === 'PROD' ? 'production' : 'development';
+    const contractAddress = contractAddresses.referral[env];
+
+    try {
+        const CHILDREN_SLOT = 4; // Hardcoded slot for _children mapping
+        const abiCoder = ethers.AbiCoder.defaultAbiCoder();
+        const slotEncoded = abiCoder.encode(["uint256"], [CHILDREN_SLOT]);
+
+        const referrerHex = window.tronWeb.address.toHex(referrerAddress);
+        const referrerEthAddress = '0x' + referrerHex.substring(2);
+
+        const keyEncoded = abiCoder.encode(["address"], [referrerEthAddress]);
+        const lengthSlot = ethers.keccak256(ethers.concat([keyEncoded, slotEncoded]));
+        const arrayStartSlot = ethers.keccak256(lengthSlot);
+        const arrayStartBN = BigInt(arrayStartSlot);
+
+        const elementSlotBN = arrayStartBN + BigInt(index);
+        const elementSlot = '0x' + elementSlotBN.toString(16);
+
+        const val = await getStorageAt(contractAddress, elementSlot);
+        if (!val) return null;
+
+        const cleanVal = val.startsWith('0x') ? val.substring(2) : val;
+        if (cleanVal.length < 40) return null;
+        const addressLast40 = cleanVal.substring(cleanVal.length - 40);
+        const addressHex = '41' + addressLast40;
+        return window.tronWeb.address.fromHex(addressHex);
+
+    } catch (error) {
+        console.error("getDirectReferralAtIndex error:", error);
+        return null;
+    }
+};
+
+export const getDirectReferralsCount = async (referrerAddress) => {
+    if (!referralContract || !walletState.address) return 0;
+    try {
+        const countBN = await referralContract.getReferralCount(referrerAddress).call();
+        return Number(countBN.toString());
+    } catch (e) {
+        console.error("Failed to get referral count", e);
+        return 0;
+    }
+};
+
 export const getDirectReferrals = async (referrerAddress) => {
     if (!referralContract || !walletState.address) return { count: 0, referrals: [] };
+    
+    // ... (Keep existing implementation for backward compatibility or bulk fetch if needed, 
+    //      but user requested lazy loading, so we might not use this fully in the new flow,
+    //      however, keeping it doesn't hurt)
+    // For now, let's just delegate to the new optimized functions if we wanted, 
+    // but the user's request specifically asked to change the flow.
+    // The previous implementation is fine for "get all", but we will likely use getDirectReferralAtIndex in the UI.
+    
+    // Re-using the logic from before for full fetch:
+    const count = await getDirectReferralsCount(referrerAddress);
+    if (count === 0) return { count: 0, referrals: [] };
+
+    const foundDirects = [];
+    const BATCH_SIZE = 20;
+    for (let i = 0; i < count; i += BATCH_SIZE) {
+        // ... (Similar batch logic using getDirectReferralAtIndex or manual loop)
+        // Optimized loop reusing the calculation might be better than calling getDirectReferralAtIndex repeatedly
+        // to avoid re-hashing key slots every time, but for < 100 items it's negligible.
+        // Let's keep the previous implementation of this function as is for now?
+        // Actually, let's leave it as is to avoid breaking anything else using it, 
+        // and add the new granular functions above.
+    }
+    // ... (rest of the original function logic)
+    
+    // To match the previous file content exactly for search/replace context, I will just append the new functions 
+    // and keep the old one or modify it slightly.
+    // Since I need to match exact string for replace, I will REPLACE the whole function block 
+    // with the split versions + the original one (or a wrapper).
+    
+    // Wait, the user wants lazy loading. So I should expose `getDirectReferralAtIndex`.
+    // Let's rewrite `getDirectReferrals` to use the helper or just keep it and ADD the new ones.
+    
+    // Let's just return the original logic for `getDirectReferrals` but ADD the new exports.
+    // But since I have to use search_replace, I'll replace the whole block.
+    
+    // RE-IMPLEMENTING getDirectReferrals to use the same logic but exposing the helpers.
     
     const env = APP_ENV === 'PROD' ? 'production' : 'development';
     const contractAddress = contractAddresses.referral[env];
 
     try {
-        // 1. Get Count from Contract View Function
         let totalDirects = 0;
         try {
             const countBN = await referralContract.getReferralCount(referrerAddress).call();
@@ -1024,21 +1107,13 @@ export const getDirectReferrals = async (referrerAddress) => {
             return { count: 0, referrals: [] };
         }
         
-        // 2. Manual Storage Reading for List
-        const CHILDREN_SLOT = 4; // Hardcoded slot for _children mapping
-        
+        const CHILDREN_SLOT = 4;
         const abiCoder = ethers.AbiCoder.defaultAbiCoder();
         const slotEncoded = abiCoder.encode(["uint256"], [CHILDREN_SLOT]);
-        
         const referrerHex = window.tronWeb.address.toHex(referrerAddress);
         const referrerEthAddress = '0x' + referrerHex.substring(2);
-        
         const keyEncoded = abiCoder.encode(["address"], [referrerEthAddress]);
-        
-        // Length Slot = keccak256(key . slot)
         const lengthSlot = ethers.keccak256(ethers.concat([keyEncoded, slotEncoded]));
-        
-        // Array Start = keccak256(lengthSlot)
         const arrayStartSlot = ethers.keccak256(lengthSlot);
         const arrayStartBN = BigInt(arrayStartSlot); 
         
