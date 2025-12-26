@@ -894,8 +894,8 @@ export const getFrontendQuotaLimit = async (forceRefresh = false) => {
             getOspReserveU(forceRefresh)
         ]);
         
-        // 0.1% limit = reserveU / 1000
-        const limit = reserveU.div(1000);
+        // 0.08% limit = reserveU * 0.0008
+        const limit = reserveU.times(0.0008);
         
         let available;
         if (netIn.gte(limit)) {
