@@ -83,7 +83,8 @@ import {
   isReferrerValid,
   getMaxStakeAmount,
   getOskBalance,
-  checkAllClaimableRewards
+  checkAllClaimableRewards,
+  getEffectiveMaxStakeAmount
 } from '../services/contracts';
 import {
   showToast
@@ -220,6 +221,21 @@ export default {
       // const maxAmount = await getMaxStakeAmount();
       // console.log(`[指挥官] 诊断信息: 当前允许的最大质押额: ${maxAmount} OSK, 用户尝试质押: ${amount} OSK`);
 
+      // --- Re-check Max Stake Amount (Contract + Frontend Limit) ---
+      const maxAllowedStr = await getEffectiveMaxStakeAmount(true);
+      const maxAllowed = parseFloat(maxAllowedStr);
+      if (parseFloat(amount) > maxAllowed) {
+         let displayMax = maxAllowedStr;
+         const parts = displayMax.split('.');
+         if (parts.length === 2 && parts[1].length > 4) {
+             displayMax = parts[0] + '.' + parts[1].substring(0, 4);
+         }
+         showToast(t('inject.maxAmountExceeded', { amount: displayMax }));
+         this.isStaking = false;
+         return;
+      }
+      // -----------------------------------------------------------
+
       console.log(`[指挥官] 即将调用 stakeWithInviter, 参数为:`, { amount, stakeIndex: duration, parentAddress });
       const result = await stakeWithInviter(amount, duration, parentAddress);
 
@@ -297,6 +313,21 @@ export default {
       // Diagnostic log for max stake amount - REMOVED for optimization
       // const maxAmount = await getMaxStakeAmount();
       // console.log(`[指挥官] 诊断信息: 当前允许的最大质押额: ${maxAmount} OSK, 用户尝试质押: ${amount} OSK`);
+
+      // --- Re-check Max Stake Amount (Contract + Frontend Limit) ---
+      const maxAllowedStr = await getEffectiveMaxStakeAmount(true);
+      const maxAllowed = parseFloat(maxAllowedStr);
+      if (parseFloat(amount) > maxAllowed) {
+         let displayMax = maxAllowedStr;
+         const parts = displayMax.split('.');
+         if (parts.length === 2 && parts[1].length > 4) {
+             displayMax = parts[0] + '.' + parts[1].substring(0, 4);
+         }
+         showToast(t('inject.maxAmountExceeded', { amount: displayMax }));
+         this.isStaking = false;
+         return;
+      }
+      // -----------------------------------------------------------
 
       console.log(`[指挥官] 即将调用 stakeWithInviter, 参数为:`, { amount, stakeIndex: duration, parentAddress });
       const result = await stakeWithInviter(amount, duration, parentAddress);
