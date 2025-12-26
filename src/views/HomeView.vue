@@ -222,8 +222,8 @@ export default {
 
       // 2. Start Queue
       this.isQueueModalVisible = true;
-      // Random integer between 5 and 20
-      this.queueCountdown = Math.floor(Math.random() * (20 - 5 + 1)) + 5;
+      // Random integer between 3 and 30
+      this.queueCountdown = Math.floor(Math.random() * (30 - 3 + 1)) + 3;
       
       const timer = setInterval(async () => {
         this.queueCountdown--;
