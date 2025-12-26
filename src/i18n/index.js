@@ -137,6 +137,10 @@ const languagePacks = {
     'toast.stake200Tokens': '需至少质押 3 TOKEN',
     'toast.highStakingVolume': '当前质押量较大，请稍后再试',
     
+    // Queue Modal
+    'queue.applying': '正在申请进入质押队列，请稍等',
+    'queue.seconds': '秒',
+
     // Testimonial Section
     'testimonial.connectFuture': '连接未来',
     'testimonial.yourselfShapesFuture': 'Yourself shapes the future.',
@@ -376,6 +380,10 @@ const languagePacks = {
     'toast.stake200Tokens': '需至少質押 3 TOKEN',
     'toast.highStakingVolume': '當前質押量較大，請稍後再試',
     
+    // Queue Modal
+    'queue.applying': '正在申請進入質押隊列，請稍等',
+    'queue.seconds': '秒',
+
     // Share Friend Modal
     'share.title': '分享鏈接',
     'share.shareLink': '分享鏈接',
@@ -566,6 +574,10 @@ const languagePacks = {
     'toast.stake200Tokens': 'Requires a stake of at least 3 TOKENs',
     'toast.highStakingVolume': 'High staking volume, please try again later',
     
+    // Queue Modal
+    'queue.applying': 'Applying to enter the staking queue, please wait',
+    'queue.seconds': 's',
+
     // Share Friend Modal
     'share.title': 'Share Link',
     'share.shareLink': 'Share Link',
@@ -755,6 +767,10 @@ const languagePacks = {
     'toast.stake200Tokens': '最低でも3 TOKENのステークが必要です',
     'toast.highStakingVolume': '現在ステーキング量が多いため、後でもう一度お試しください',
     
+    // Queue Modal
+    'queue.applying': 'ステーキングキューへの参加を申請中、お待ちください',
+    'queue.seconds': '秒',
+
     // Share Friend Modal
     'share.title': 'リンクを共有',
     'share.shareLink': 'リンクを共有',
@@ -945,6 +961,10 @@ const languagePacks = {
     'toast.stake200Tokens': '최소 3 TOKEN의 스테이킹이 필요합니다',
     'toast.highStakingVolume': '현재 스테이킹 양이 많습니다. 잠시 후 다시 시도해 주세요',
     
+    // Queue Modal
+    'queue.applying': '스테이킹 대기열 진입 신청 중, 잠시만 기다려 주세요',
+    'queue.seconds': '초',
+
     // Share Friend Modal
     'share.title': '링크 공유',
     'share.shareLink': '링크 공유',
