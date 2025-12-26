@@ -193,11 +193,15 @@ const fetchStakingData = async () => {
             const id = Number(record.id);
             let interest;
             
+            // Convert everything to BigInt explicitly to avoid type mixing errors
+            const amountBn = BigInt(record.amount.toString());
+            
             if (status === 0) {
                 const totalValue = liveRewards[index] ? BigInt(liveRewards[index].toString()) : 0n;
-                interest = totalValue > record.amount ? totalValue - record.amount : 0n;
+                interest = totalValue > amountBn ? totalValue - amountBn : 0n;
             } else {
-                interest = record.finalReward > 0 ? record.finalReward - record.amount : 0n;
+                const finalRewardBn = BigInt(record.finalReward.toString());
+                interest = finalRewardBn > 0n ? finalRewardBn - amountBn : 0n;
             }
 
             const stakeTimeInSeconds = Number(record.stakeTime);
