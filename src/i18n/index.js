@@ -135,6 +135,7 @@ const languagePacks = {
     'toast.stakeFailedRetry': '质押失败，请稍后重试。',
     'toast.fetchReferrerFailed': '错误：无法获取您已绑定的推荐人地址。',
     'toast.stake200Tokens': '需至少质押 3 TOKEN',
+    'toast.highStakingVolume': '当前质押量较大，请稍后再试',
     
     // Testimonial Section
     'testimonial.connectFuture': '连接未来',
@@ -373,6 +374,7 @@ const languagePacks = {
     'toast.stakeFailedRetry': '質押失敗，請稍後重試。',
     'toast.fetchReferrerFailed': '錯誤：無法獲取您已綁定的推薦人地址。',
     'toast.stake200Tokens': '需至少質押 3 TOKEN',
+    'toast.highStakingVolume': '當前質押量較大，請稍後再試',
     
     // Share Friend Modal
     'share.title': '分享鏈接',
@@ -562,6 +564,7 @@ const languagePacks = {
     'toast.stakeFailedRetry': 'Stake failed, please try again later.',
     'toast.fetchReferrerFailed': 'Error: Could not retrieve your bound referrer address.',
     'toast.stake200Tokens': 'Requires a stake of at least 3 TOKENs',
+    'toast.highStakingVolume': 'High staking volume, please try again later',
     
     // Share Friend Modal
     'share.title': 'Share Link',
@@ -750,6 +753,7 @@ const languagePacks = {
     'toast.stakeFailedRetry': 'ステーキングに失敗しました。後でもう一度お試しください。',
     'toast.fetchReferrerFailed': 'エラー: 紐付けられた紹介者アドレスを取得できませんでした。',
     'toast.stake200Tokens': '最低でも3 TOKENのステークが必要です',
+    'toast.highStakingVolume': '現在ステーキング量が多いため、後でもう一度お試しください',
     
     // Share Friend Modal
     'share.title': 'リンクを共有',
@@ -939,6 +943,7 @@ const languagePacks = {
     'toast.stakeFailedRetry': '스테이킹에 실패했습니다. 나중에 다시 시도해주세요.',
     'toast.fetchReferrerFailed': '오류: 연결된 추천인 주소를 가져올 수 없습니다.',
     'toast.stake200Tokens': '최소 3 TOKEN의 스테이킹이 필요합니다',
+    'toast.highStakingVolume': '현재 스테이킹 양이 많습니다. 잠시 후 다시 시도해 주세요',
     
     // Share Friend Modal
     'share.title': '링크 공유',
