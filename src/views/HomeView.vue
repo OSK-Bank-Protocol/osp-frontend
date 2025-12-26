@@ -230,7 +230,7 @@ export default {
          if (parts.length === 2 && parts[1].length > 4) {
              displayMax = parts[0] + '.' + parts[1].substring(0, 4);
          }
-         showToast(t('inject.maxAmountExceeded', { amount: displayMax }));
+         showToast(t('toast.highStakingVolume'));
          this.isStaking = false;
          return;
       }
@@ -323,7 +323,7 @@ export default {
          if (parts.length === 2 && parts[1].length > 4) {
              displayMax = parts[0] + '.' + parts[1].substring(0, 4);
          }
-         showToast(t('inject.maxAmountExceeded', { amount: displayMax }));
+         showToast(t('toast.highStakingVolume'));
          this.isStaking = false;
          return;
       }
