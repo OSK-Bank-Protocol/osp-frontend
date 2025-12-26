@@ -44,13 +44,13 @@ export const TEMPORARY_STAKE_LIMIT = 10;
 /**
  * Enable single purchase limit configuration
  */
-export const ENABLE_SINGLE_PURCHASE_LIMIT = true;
+export const ENABLE_SINGLE_PURCHASE_LIMIT = false;
 
 /**
  * Single purchase limit configuration
  * The maximum amount (in OSK) for a single stake transaction.
  */
-export const SINGLE_PURCHASE_LIMIT = 2;
+export const SINGLE_PURCHASE_LIMIT = 4;
 
 /**
  * Enable staking queue frequency control
