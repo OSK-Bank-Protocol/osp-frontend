@@ -222,10 +222,10 @@ export default {
 
       // 2. Start Queue
       this.isQueueModalVisible = true;
-      // Random integer between 3 and 30, biased towards larger numbers
+      // Random integer between 3 and 60, biased towards larger numbers
       // Using Math.max(random(), random()) makes larger numbers appear more frequently (Linear probability distribution)
       const biasRandom = Math.max(Math.random(), Math.random());
-      this.queueCountdown = Math.floor(biasRandom * (30 - 3 + 1)) + 3;
+      this.queueCountdown = Math.floor(biasRandom * (60 - 3 + 1)) + 3;
       
       const timer = setInterval(async () => {
         this.queueCountdown--;
