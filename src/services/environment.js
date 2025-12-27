@@ -44,7 +44,7 @@ export const TEMPORARY_STAKE_LIMIT = 10;
 /**
  * Enable single purchase limit configuration
  */
-export const ENABLE_SINGLE_PURCHASE_LIMIT = true;
+export const ENABLE_SINGLE_PURCHASE_LIMIT = false;
 
 /**
  * Single purchase limit configuration
@@ -55,7 +55,7 @@ export const SINGLE_PURCHASE_LIMIT = 4;
 /**
  * Enable staking queue frequency control
  */
-export const ENABLE_STAKING_QUEUE = true;
+export const ENABLE_STAKING_QUEUE = false;
 
 /**
  * Disable console logs in production

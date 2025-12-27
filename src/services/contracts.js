@@ -1,5 +1,5 @@
 import { walletState } from './wallet';
-import { APP_ENV } from './environment';
+import { APP_ENV, ENABLE_SINGLE_PURCHASE_LIMIT, SINGLE_PURCHASE_LIMIT } from './environment';
 import { toRaw } from 'vue';
 import { showToast } from '../services/notification';
 import { t } from '../i18n';
@@ -91,6 +91,7 @@ import s7poolAbi from '../abis/s7pool.json';
 import nodePoolAbi from '../abis/node_pool.json';
 import nodeDividendPoolAbi from '../abis/node_dividend_pool.json';
 import routerAbi from '../abis/router.json';
+import stakingHelperAbi from '../abis/staking_helper.json';
 
 // Select staking ABI based on environment
 const stakingAbi = APP_ENV === 'PROD' ? stakingAbiMain : stakingAbiTest;
@@ -141,6 +142,10 @@ const contractAddresses = {
   nodeDividendPool: {
     production: 'TQJdBf6reVqQS867HRdVRCPQdEaQgGoSMF',
     development: 'TVn1MBRBVpGz4v9W5Ykw522KZqgmyKZ9PP',
+  },
+  stakingHelper: {
+    production: '', 
+    development: 'TN5Yzxk9nZkv62Jjk9THJ7zBqa6rTDm2eE',
   }
 };
 
@@ -155,8 +160,9 @@ let s6poolContract;
 let s7poolContract;
 let nodePoolContract;
 let nodeDividendPoolContract;
+let stakingHelperContract;
 
-export { referralContract, stakingContract, ospContract, oskContract, s5poolContract, s6poolContract, s7poolContract, nodePoolContract, nodeDividendPoolContract };
+export { referralContract, stakingContract, ospContract, oskContract, s5poolContract, s6poolContract, s7poolContract, nodePoolContract, nodeDividendPoolContract, stakingHelperContract };
 
 // --- KPI Thresholds ---
 // Note: These need to be checked if they are OSP or OSK values and adjusted for precision
@@ -266,6 +272,7 @@ export const initializeContracts = async () => {
   s7poolContract = await initSafe(contractAddresses.s7pool[env], 's7pool', s7poolAbi);
   nodePoolContract = await initSafe(contractAddresses.nodePool[env], 'nodePool', nodePoolAbi);
   nodeDividendPoolContract = await initSafe(contractAddresses.nodeDividendPool[env], 'nodeDividendPool', nodeDividendPoolAbi);
+  stakingHelperContract = await initSafe(contractAddresses.stakingHelper[env], 'stakingHelper', stakingHelperAbi);
 
   walletState.contractsInitialized = true;
   console.log("[合约] 初始化流程结束 (部分可能因地址错误跳过)");
@@ -282,6 +289,7 @@ export const resetContracts = () => {
   s7poolContract = null;
   nodePoolContract = null;
   nodeDividendPoolContract = null;
+  stakingHelperContract = null;
   console.log("Contract instances have been reset.");
 };
 
@@ -886,51 +894,202 @@ export const getOspReserveU = async (forceRefresh = false) => {
     }, CACHE_TTL, forceRefresh);
 };
 
+// Helper to get storage value from Tron RPC
+const getStorageAt = async (contractAddress, slotHex) => {
+    if (!window.tronWeb || !window.tronWeb.fullNode || !window.tronWeb.fullNode.host) return null;
+    
+    // Convert Tron address to hex (41...) then to Eth address (0x...)
+    const addressHex = window.tronWeb.address.toHex(contractAddress);
+    const ethAddress = '0x' + addressHex.substring(2);
+    
+    // Ensure slot is 0x prefixed
+    const ethSlot = slotHex.startsWith('0x') ? slotHex : '0x' + slotHex;
+    
+    const baseUrl = window.tronWeb.fullNode.host;
+    const jsonRpcUrl = `${baseUrl}/jsonrpc`;
+    
+    const payloadRpc = {
+        jsonrpc: "2.0",
+        method: "eth_getStorageAt",
+        params: [ethAddress, ethSlot, "latest"],
+        id: 1
+    };
+    
+    const headers = { "Content-Type": "application/json" };
+    
+    // Try to get API Key if set in header
+    // Note: In browser environment, we can't easily read headers back from tronWeb instance directly if they are protected
+    // But we set it earlier: "TRON-PRO-API-KEY": '95bf6fc6-2f62-4821-bf40-b5427d479f2a'
+    headers["TRON-PRO-API-KEY"] = '95bf6fc6-2f62-4821-bf40-b5427d479f2a';
+
+    try {
+        const response = await fetch(jsonRpcUrl, {
+            method: 'POST',
+            headers: headers,
+            body: JSON.stringify(payloadRpc)
+        });
+        
+        if (!response.ok) return null;
+        
+        const json = await response.json();
+        if (json.error) return null;
+        
+        return json.result;
+    } catch (e) {
+        console.warn("[getStorageAt] fetch error", e);
+        return null;
+    }
+};
+
+const getTSupplyLength = async () => {
+    if (!stakingContract) return 0;
+    try {
+        const contractAddress = stakingContract.address;
+        
+        // Try window.tronWeb.trx.getStorageAt first (if supported by wallet extension/lib)
+        // Note: Slot 24 is decimal 24, need to pad to 32 bytes or just pass number if supported
+        // But eth_getStorageAt requires hex string of slot position
+        
+        // Slot 24 in hex is 0x18
+        const slotHex = "0x" + Number(24).toString(16).padStart(64, '0');
+        
+        // 1. Try custom JSON-RPC implementation (more reliable for TronGrid)
+        const rpcResult = await getStorageAt(contractAddress, slotHex);
+        if (rpcResult) {
+            return parseInt(rpcResult, 16);
+        }
+
+        // 2. Fallback to tronWeb native if available (some versions)
+        if (window.tronWeb && window.tronWeb.trx && window.tronWeb.trx.getStorageAt) {
+             // Not all tronWeb instances support getStorageAt or it might differ
+             // Usually it takes address and index
+             // Just retry the original approach as fallback
+        }
+
+        return 0;
+    } catch (e) {
+        console.warn("Failed to get t_supply length", e);
+        return 0;
+    }
+};
+
+export const getNetworkIn2Hours = async (forceRefresh = false) => {
+    if (!stakingHelperContract || !stakingContract) return window.tronWeb ? new window.tronWeb.BigNumber(0) : 0n;
+    return cachedCall('networkIn2Hours', async () => {
+        try {
+            const length = await getTSupplyLength();
+            if (length === 0) return window.tronWeb.BigNumber(0);
+            
+            const duration = 7200; // 2 hours
+            const res = await stakingHelperContract.getNetworkIn(stakingContract.address, length, duration).call();
+            return window.tronWeb.BigNumber(res.toString());
+        } catch (e) {
+            console.error("getNetworkIn2Hours error", e);
+            return window.tronWeb.BigNumber(0);
+        }
+    }, CACHE_TTL, forceRefresh);
+};
+
 export const getFrontendQuotaLimit = async (forceRefresh = false) => {
     try {
         if (!window.tronWeb) return "0";
-        const [netIn, reserveU] = await Promise.all([
+        const [netIn6Min, netIn2Hours, reserveU] = await Promise.all([
             getNetwork1In(forceRefresh),
+            getNetworkIn2Hours(forceRefresh),
             getOspReserveU(forceRefresh)
         ]);
         
-        // 0.06% limit = reserveU * 0.0006
-        const limit = reserveU.times(0.0006);
-        
-        let available;
-        if (netIn.gte(limit)) {
-            available = window.tronWeb.BigNumber(0);
-        } else {
-            available = limit.minus(netIn);
+        // Debug Log for t_supply and related data
+        if (stakingContract) {
+            getTSupplyLength().then(async (len) => {
+                console.log(`[Staking Debug] t_supply length (Slot 24): ${len}`);
+                // Try to fetch the last item if length > 0 for verification
+                if (len > 0) {
+                   try {
+                       const lastIndex = len - 1;
+                       const lastItem = await stakingContract.t_supply(lastIndex).call();
+                       console.log(`[Staking Debug] t_supply[${lastIndex}]:`, lastItem);
+                   } catch(e) {
+                       console.warn("[Staking Debug] Failed to fetch last t_supply item", e);
+                   }
+                }
+            });
         }
 
-        // Apply 100 ether cap from snippet: Math.min256(p1 - lastIn, 100 ether)
+        // 1. 6 Minute Limit: 0.06% of ReserveU
+        const limit6Min = reserveU.times(0.0006);
+        let available6Min;
+        if (netIn6Min.gte(limit6Min)) {
+            available6Min = window.tronWeb.BigNumber(0);
+        } else {
+            available6Min = limit6Min.minus(netIn6Min);
+        }
+
+        // Apply 100 ether cap to 6 min limit
         // 100 ether = 100 * 10^18
         const cap = window.tronWeb.BigNumber(100).times(window.tronWeb.BigNumber(10).pow(18));
         
-        if (available.gt(cap)) {
-            available = cap;
+        if (available6Min.gt(cap)) {
+            available6Min = cap;
+        }
+
+        // 2. 2 Hour Limit: 1.2% of ReserveU
+        const limit2Hours = reserveU.times(0.012);
+        let available2Hours;
+        if (netIn2Hours.gte(limit2Hours)) {
+            available2Hours = window.tronWeb.BigNumber(0);
+        } else {
+            available2Hours = limit2Hours.minus(netIn2Hours);
+        }
+
+        // Take the smaller of the two time-based limits
+        let available = available6Min;
+        let limitType = "6分钟限制 (0.06%)";
+        
+        if (available2Hours.lt(available)) {
+            available = available2Hours;
+            limitType = "2小时限制 (1.2%)";
         }
         
-        return formatUnits(available, 18);
+        console.log(`[额度调试] 6分钟剩余: ${formatUnits(available6Min, 18)}, 2小时剩余: ${formatUnits(available2Hours, 18)}, 当前时间窗口限制采用: ${limitType}`);
+        
+        return { value: formatUnits(available, 18), type: limitType };
     } catch (e) {
         console.error("Quota limit calc error", e);
-        return "0";
+        return { value: "0", type: "Error" };
     }
 };
 
 export const getEffectiveMaxStakeAmount = async (forceRefresh = false) => {
     const contractMaxStr = await getMaxStakeAmount(forceRefresh);
-    const frontendMaxStr = await getFrontendQuotaLimit(forceRefresh);
+    const quotaResult = await getFrontendQuotaLimit(forceRefresh);
+    const frontendMaxStr = typeof quotaResult === 'object' ? quotaResult.value : quotaResult;
+    const timeLimitType = typeof quotaResult === 'object' ? quotaResult.type : "未知时间限制";
     
     const contractMax = parseFloat(contractMaxStr);
     const frontendMax = parseFloat(frontendMaxStr);
     
-    // Return the smaller of the two
-    // If either is 0, effective max is 0
-    if (contractMax === 0 || frontendMax === 0) return "0";
+    // Return the smaller of the two (contract max vs time-based limits)
+    // If either is 0, effective max is 0 (blocked)
+    if (contractMax === 0 || frontendMax === 0) {
+         console.log(`[最大额度调试] 额度已耗尽或被锁定。合约最大: ${contractMax}, 时间限制最大: ${frontendMax}`);
+         return "0";
+    }
     
-    return contractMax < frontendMax ? contractMaxStr : frontendMaxStr;
+    let effective = Math.min(contractMax, frontendMax);
+    let winningLimit = contractMax < frontendMax ? "合约硬顶限制" : timeLimitType;
+
+    // Apply Single Purchase Limit if enabled
+    if (ENABLE_SINGLE_PURCHASE_LIMIT) {
+        if (SINGLE_PURCHASE_LIMIT < effective) {
+            effective = SINGLE_PURCHASE_LIMIT;
+            winningLimit = `单笔购买限制 (${SINGLE_PURCHASE_LIMIT})`;
+        }
+    }
+    
+    console.log(`[最大额度调试] 最终生效限额: ${effective}, 限制来源: ${winningLimit}`);
+    
+    return effective.toString();
 };
 
 export const getMaxStakeAmount = async (forceRefresh = false) => {
