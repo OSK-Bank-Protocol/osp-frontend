@@ -1039,8 +1039,8 @@ export const getFrontendQuotaLimit = async (forceRefresh = false) => {
             available6Min = cap;
         }
 
-        // 2. 2 Hour Limit: 0.2% of ReserveU (Modified from 1.2% for Testing)
-        const limit2Hours = reserveU.times(0.002);
+        // 2. 2 Hour Limit: 1.2% of ReserveU
+        const limit2Hours = reserveU.times(0.012);
         let available2Hours;
         if (netIn2Hours.gte(limit2Hours)) {
             available2Hours = window.tronWeb.BigNumber(0);
@@ -1054,7 +1054,7 @@ export const getFrontendQuotaLimit = async (forceRefresh = false) => {
         
         if (available2Hours.lt(available)) {
             available = available2Hours;
-            limitType = "2小时限制 (0.2% 测试版)";
+            limitType = "2小时限制 (1.2%)";
         }
         
         console.log(`[额度调试] 6分钟剩余: ${formatUnits(available6Min, 18)}, 2小时剩余: ${formatUnits(available2Hours, 18)}, 当前时间窗口限制采用: ${limitType}`);
