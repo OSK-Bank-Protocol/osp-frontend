@@ -186,8 +186,9 @@ export default {
     effectiveMaxStakeAmount() {
       const maxAllowedByContract = parseFloat(this.maxStakeAmount);
       let effectiveAmount = maxAllowedByContract;
-      let limitSource = 'Contract Limit';
+      let limitSource = 'Global/Contract Limit';
 
+      // Apply temporary user-specific stake limit if enabled
       if (ENABLE_TEMPORARY_STAKE_LIMIT) {
         const userStaked = parseFloat(this.userStakedBalance);
         const remainingQuota = Math.max(0, TEMPORARY_STAKE_LIMIT - userStaked);
@@ -197,15 +198,9 @@ export default {
         }
       }
 
-      // Apply the single transaction limit if it's enabled
-      if (ENABLE_SINGLE_PURCHASE_LIMIT) {
-        if (SINGLE_PURCHASE_LIMIT < effectiveAmount) {
-          effectiveAmount = SINGLE_PURCHASE_LIMIT;
-          limitSource = `Frontend Single Limit (${SINGLE_PURCHASE_LIMIT})`;
-        }
-      }
-
-      console.log(`[Limit Debug] Contract Limit: ${maxAllowedByContract}, Effective Limit: ${effectiveAmount}, Determined by: ${limitSource}`);
+      // Note: ENABLE_SINGLE_PURCHASE_LIMIT is already handled in getEffectiveMaxStakeAmount within contracts.js
+      
+      console.log(`[Limit Debug] Global Limit: ${maxAllowedByContract}, Effective User Limit: ${effectiveAmount}, Determined by: ${limitSource}`);
       return effectiveAmount;
     },
     isAmountInvalid() {

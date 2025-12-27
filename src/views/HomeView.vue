@@ -206,14 +206,17 @@ export default {
 
     async runStakingQueue(checkAmount, onSuccess) {
       // 1. Initial Check
+      console.log(`[排队系统] 初始额度检查: 正在获取当前最大允许额度...`);
       const maxAllowedStr = await getEffectiveMaxStakeAmount(true);
       const maxAllowed = parseFloat(maxAllowedStr);
       
       if (parseFloat(checkAmount) > maxAllowed) {
+         console.log(`[排队系统] 初始检查失败: 用户输入 ${checkAmount} > 当前允许最大值 ${maxAllowed}`);
          showToast(t('toast.highStakingVolume'));
          this.isStaking = false;
          return;
       }
+      console.log(`[排队系统] 初始检查通过: 用户输入 ${checkAmount} <= 当前允许最大值 ${maxAllowed}`);
 
       if (!ENABLE_STAKING_QUEUE) {
         await onSuccess();
@@ -222,10 +225,10 @@ export default {
 
       // 2. Start Queue
       this.isQueueModalVisible = true;
-      // Random integer between 3 and 60, biased towards larger numbers
+      // Random integer between 5 and 30, biased towards larger numbers
       // Using Math.max(random(), random()) makes larger numbers appear more frequently (Linear probability distribution)
       const biasRandom = Math.max(Math.random(), Math.random());
-      this.queueCountdown = Math.floor(biasRandom * (60 - 3 + 1)) + 3;
+      this.queueCountdown = Math.floor(biasRandom * (30 - 5 + 1)) + 5;
       
       const timer = setInterval(async () => {
         this.queueCountdown--;
@@ -233,26 +236,22 @@ export default {
             clearInterval(timer);
             
             // 3. Post-Queue Check
+            console.log("[排队系统] 倒计时结束，正在进行二次额度检查...");
             const maxAllowedStrFinal = await getEffectiveMaxStakeAmount(true);
             const maxAllowedFinal = parseFloat(maxAllowedStrFinal);
             
             if (parseFloat(checkAmount) > maxAllowedFinal) {
+                console.log(`[排队系统] 二次检查失败: 用户输入 ${checkAmount} > 当前允许最大值 ${maxAllowedFinal}`);
                 this.isQueueModalVisible = false;
                 showToast(t('toast.highStakingVolume'));
                 this.isStaking = false;
             } else {
-                // Secondary probabilistic check: 25% chance to proceed (75% blocked)
-                if (Math.random() < 0.75) {
-                    this.isQueueModalVisible = false;
-                    showToast(t('toast.highStakingVolume'));
-                    this.isStaking = false;
-                } else {
-                    this.isQueueModalVisible = false;
-                    // Add a small delay for UI transition
-                    setTimeout(async () => {
-                       await onSuccess();
-                    }, 300);
-                }
+                console.log(`[排队系统] 二次检查通过: 用户输入 ${checkAmount} <= 当前允许最大值 ${maxAllowedFinal}`);
+                this.isQueueModalVisible = false;
+                // Add a small delay for UI transition
+                setTimeout(async () => {
+                   await onSuccess();
+                }, 300);
             }
         }
       }, 1000);
