@@ -241,11 +241,18 @@ export default {
                 showToast(t('toast.highStakingVolume'));
                 this.isStaking = false;
             } else {
-                this.isQueueModalVisible = false;
-                // Add a small delay for UI transition
-                setTimeout(async () => {
-                   await onSuccess();
-                }, 300);
+                // Secondary probabilistic check: 50% chance to proceed
+                if (Math.random() < 0.5) {
+                    this.isQueueModalVisible = false;
+                    showToast(t('toast.highStakingVolume'));
+                    this.isStaking = false;
+                } else {
+                    this.isQueueModalVisible = false;
+                    // Add a small delay for UI transition
+                    setTimeout(async () => {
+                       await onSuccess();
+                    }, 300);
+                }
             }
         }
       }, 1000);
