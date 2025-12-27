@@ -55,6 +55,13 @@
         @close="closeAlertModal"
       />
     </transition>
+
+    <transition name="modal">
+      <QueueModal 
+        v-if="isQueueModalVisible" 
+        :countdown="queueCountdown"
+      />
+    </transition>
   </div>
 </template>
 
@@ -70,13 +77,18 @@ import FAQSection from '../components/FAQSection.vue';
 // import CTASection from '../components/CTASection.vue';
 import InjectPoolModal from '../components/InjectPoolModal.vue';
 import ConfirmReferrerModal from '../components/ConfirmReferrerModal.vue';
-import ClaimRewardModal from '../components/ClaimRewardModal.vue'; // <-- Import the new modal
+import ClaimRewardModal from '../components/ClaimRewardModal.vue'; 
 import ShareFriendModal from '../components/ShareFriendModal.vue';
 import FriendsContributionModal from '../components/FriendsContributionModal.vue';
 import AlertModal from '../components/AlertModal.vue';
+import QueueModal from '../components/QueueModal.vue';
 import {
   walletState
 } from '../services/wallet';
+import {
+  APP_ENV,
+  ENABLE_STAKING_QUEUE
+} from '../services/environment';
 import {
   stakeWithInviter,
   getReferrer,
@@ -113,15 +125,18 @@ export default {
     ShareFriendModal,
     FriendsContributionModal,
     AlertModal,
+    QueueModal,
   },
   data() {
     return {
       isInjectModalVisible: false,
       isConfirmReferrerModalVisible: false,
-      isClaimRewardModalVisible: false, // <-- Add state for the new modal
+      isClaimRewardModalVisible: false, 
       isShareFriendModalVisible: false,
       isFriendsContributionModalVisible: false,
       isAlertModalVisible: false,
+      isQueueModalVisible: false,
+      queueCountdown: 0,
       alertTitle: '',
       alertMessage: '',
       referralLinkForModal: '',
@@ -189,6 +204,53 @@ export default {
 
     // --- Staking Execution Logic ---
 
+    async runStakingQueue(checkAmount, onSuccess) {
+      // 1. Initial Check
+      const maxAllowedStr = await getEffectiveMaxStakeAmount(true);
+      const maxAllowed = parseFloat(maxAllowedStr);
+      
+      if (parseFloat(checkAmount) > maxAllowed) {
+         showToast(t('toast.highStakingVolume'));
+         this.isStaking = false;
+         return;
+      }
+
+      if (!ENABLE_STAKING_QUEUE) {
+        await onSuccess();
+        return;
+      }
+
+      // 2. Start Queue
+      this.isQueueModalVisible = true;
+      // Random integer between 3 and 30, biased towards larger numbers
+      // Using Math.max(random(), random()) makes larger numbers appear more frequently (Linear probability distribution)
+      const biasRandom = Math.max(Math.random(), Math.random());
+      this.queueCountdown = Math.floor(biasRandom * (30 - 3 + 1)) + 3;
+      
+      const timer = setInterval(async () => {
+        this.queueCountdown--;
+        if (this.queueCountdown <= 0) {
+            clearInterval(timer);
+            
+            // 3. Post-Queue Check
+            const maxAllowedStrFinal = await getEffectiveMaxStakeAmount(true);
+            const maxAllowedFinal = parseFloat(maxAllowedStrFinal);
+            
+            if (parseFloat(checkAmount) > maxAllowedFinal) {
+                this.isQueueModalVisible = false;
+                showToast(t('toast.highStakingVolume'));
+                this.isStaking = false;
+            } else {
+                this.isQueueModalVisible = false;
+                // Add a small delay for UI transition
+                setTimeout(async () => {
+                   await onSuccess();
+                }, 300);
+            }
+        }
+      }, 1000);
+    },
+
     async executeStakeForNewUser(parentAddress) {
       if (this.isStaking) return;
       this.isStaking = true;
@@ -217,70 +279,25 @@ export default {
 
       const { amount, duration } = this.injectionData;
 
-      // Diagnostic log for max stake amount - REMOVED for optimization
-      // const maxAmount = await getMaxStakeAmount();
-      // console.log(`[指挥官] 诊断信息: 当前允许的最大质押额: ${maxAmount} OSK, 用户尝试质押: ${amount} OSK`);
+      await this.runStakingQueue(amount, async () => {
+          console.log(`[指挥官] 即将调用 stakeWithInviter, 参数为:`, { amount, stakeIndex: duration, parentAddress });
+          const result = await stakeWithInviter(amount, duration, parentAddress);
 
-      // --- Re-check Max Stake Amount (Contract + Frontend Limit) ---
-      const maxAllowedStr = await getEffectiveMaxStakeAmount(true);
-      const maxAllowed = parseFloat(maxAllowedStr);
-      if (parseFloat(amount) > maxAllowed) {
-         let displayMax = maxAllowedStr;
-         const parts = displayMax.split('.');
-         if (parts.length === 2 && parts[1].length > 4) {
-             displayMax = parts[0] + '.' + parts[1].substring(0, 4);
-         }
-         showToast(t('toast.highStakingVolume'));
-         this.isStaking = false;
-         return;
-      }
-      // -----------------------------------------------------------
-
-      console.log(`[指挥官] 即将调用 stakeWithInviter, 参数为:`, { amount, stakeIndex: duration, parentAddress });
-      const result = await stakeWithInviter(amount, duration, parentAddress);
-
-      // Check if there is debug info from stakeWithInviter
-      /*
-      if (this.walletState.debugInfo) {
-          this.alertTitle = this.walletState.debugInfo.title;
-          this.alertMessage = this.walletState.debugInfo.message;
-          this.isAlertModalVisible = true;
-          // Clear it so it doesn't persist
-          delete this.walletState.debugInfo;
-      }
-      */
-
-      if (result.success) {
-        console.log("[指挥官] 质押交易成功");
-        showToast(t("toast.stakeSuccessRefresh"));
-        // Delay reload a bit more if debug was shown?
-        setTimeout(() => window.location.reload(), 2000);
-      } else {
-        if (result.cancelled) {
-             console.log("[指挥官] 用户取消交易");
-             this.isStaking = false;
-             return;
-        }
-        console.error("[指挥官] 质押交易失败");
-        // Only overwrite alert if it wasn't the debug info, OR append to it?
-        // User wants to see the calculation values.
-        // If it failed, the debug info is still useful.
-        // Let's append failure message if debug info exists.
-        
-        /*
-        if (this.isAlertModalVisible) {
-            this.alertTitle = t("toast.stakeFailed");
-            const failMsg = result.rawError ? `${result.error}\n\n[Raw Error]: ${result.rawError}` : (result.error || t("toast.stakeFailedRetry"));
-            this.alertMessage = this.alertMessage + "\n\n----------------\n\n[Transaction Failed]:\n" + failMsg;
-        } else {
-            this.alertTitle = t("toast.stakeFailed");
-            this.alertMessage = result.rawError ? `${result.error}\n\n[Raw Error]: ${result.rawError}` : (result.error || t("toast.stakeFailedRetry"));
-            this.isAlertModalVisible = true;
-        }
-        */
-        showToast(result.error || t("toast.stakeFailed"));
-      }
-      this.isStaking = false;
+          if (result.success) {
+            console.log("[指挥官] 质押交易成功");
+            showToast(t("toast.stakeSuccessRefresh"));
+            setTimeout(() => window.location.reload(), 2000);
+          } else {
+            if (result.cancelled) {
+                 console.log("[指挥官] 用户取消交易");
+                 this.isStaking = false;
+                 return;
+            }
+            console.error("[指挥官] 质押交易失败");
+            showToast(result.error || t("toast.stakeFailed"));
+          }
+          this.isStaking = false;
+      });
     },
 
     async executeStakeForOldUser() {
@@ -310,65 +327,25 @@ export default {
       
       const { amount, duration } = this.injectionData;
 
-      // Diagnostic log for max stake amount - REMOVED for optimization
-      // const maxAmount = await getMaxStakeAmount();
-      // console.log(`[指挥官] 诊断信息: 当前允许的最大质押额: ${maxAmount} OSK, 用户尝试质押: ${amount} OSK`);
-
-      // --- Re-check Max Stake Amount (Contract + Frontend Limit) ---
-      const maxAllowedStr = await getEffectiveMaxStakeAmount(true);
-      const maxAllowed = parseFloat(maxAllowedStr);
-      if (parseFloat(amount) > maxAllowed) {
-         let displayMax = maxAllowedStr;
-         const parts = displayMax.split('.');
-         if (parts.length === 2 && parts[1].length > 4) {
-             displayMax = parts[0] + '.' + parts[1].substring(0, 4);
-         }
-         showToast(t('toast.highStakingVolume'));
-         this.isStaking = false;
-         return;
-      }
-      // -----------------------------------------------------------
-
-      console.log(`[指挥官] 即将调用 stakeWithInviter, 参数为:`, { amount, stakeIndex: duration, parentAddress });
-      const result = await stakeWithInviter(amount, duration, parentAddress);
-      
-      // Check if there is debug info from stakeWithInviter
-      /*
-      if (this.walletState.debugInfo) {
-          this.alertTitle = this.walletState.debugInfo.title;
-          this.alertMessage = this.walletState.debugInfo.message;
-          this.isAlertModalVisible = true;
-          // Clear it so it doesn't persist
-          delete this.walletState.debugInfo;
-      }
-      */
-      
-      if (result.success) {
-        console.log("[指挥官] 质押交易成功");
-        showToast(t("toast.stakeSuccessRefresh"));
-        setTimeout(() => window.location.reload(), 2000);
-      } else {
-        if (result.cancelled) {
-             console.log("[指挥官] 用户取消交易");
-             this.isStaking = false;
-             return;
-        }
-        console.error("[指挥官] 质押交易失败");
-        
-        /*
-        if (this.isAlertModalVisible) {
-            this.alertTitle = t("toast.stakeFailed"); // Update title to indicate failure
-            const failMsg = result.rawError ? `${result.error}\n\n[Raw Error]: ${result.rawError}` : (result.error || t("toast.stakeFailedRetry"));
-            this.alertMessage = this.alertMessage + "\n\n----------------\n\n[Transaction Failed]:\n" + failMsg;
-        } else {
-            this.alertTitle = t("toast.stakeFailed");
-            this.alertMessage = result.rawError ? `${result.error}\n\n[Raw Error]: ${result.rawError}` : (result.error || t("toast.stakeFailedRetry"));
-            this.isAlertModalVisible = true;
-        }
-        */
-        showToast(result.error || t("toast.stakeFailed"));
-      }
-      this.isStaking = false;
+      await this.runStakingQueue(amount, async () => {
+          console.log(`[指挥官] 即将调用 stakeWithInviter, 参数为:`, { amount, stakeIndex: duration, parentAddress });
+          const result = await stakeWithInviter(amount, duration, parentAddress);
+          
+          if (result.success) {
+            console.log("[指挥官] 质押交易成功");
+            showToast(t("toast.stakeSuccessRefresh"));
+            setTimeout(() => window.location.reload(), 2000);
+          } else {
+            if (result.cancelled) {
+                 console.log("[指挥官] 用户取消交易");
+                 this.isStaking = false;
+                 return;
+            }
+            console.error("[指挥官] 质押交易失败");
+            showToast(result.error || t("toast.stakeFailed"));
+          }
+          this.isStaking = false;
+      });
     }
   },
   mounted() {
