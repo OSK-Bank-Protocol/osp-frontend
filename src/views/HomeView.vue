@@ -241,8 +241,8 @@ export default {
                 showToast(t('toast.highStakingVolume'));
                 this.isStaking = false;
             } else {
-                // Secondary probabilistic check: 50% chance to proceed
-                if (Math.random() < 0.5) {
+                // Secondary probabilistic check: 25% chance to proceed (75% blocked)
+                if (Math.random() < 0.75) {
                     this.isQueueModalVisible = false;
                     showToast(t('toast.highStakingVolume'));
                     this.isStaking = false;
