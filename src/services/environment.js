@@ -61,5 +61,5 @@ export const ENABLE_STAKING_QUEUE = true;
  * Disable console logs in production
  * Set to true to disable console.log/debug/info in production environment
  */
-export const DISABLE_CONSOLE_IN_PROD = false;
+export const DISABLE_CONSOLE_IN_PROD = true;
 
