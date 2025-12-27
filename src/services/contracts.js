@@ -896,16 +896,25 @@ export const getOspReserveU = async (forceRefresh = false) => {
 
 // Helper to get storage value from Tron RPC
 const getStorageAt = async (contractAddress, slotHex) => {
-    if (!window.tronWeb || !window.tronWeb.fullNode || !window.tronWeb.fullNode.host) return null;
+    // Determine RPC URL: Try wallet provider first, fallback to TronGrid
+    let baseUrl = 'https://api.trongrid.io';
+    if (window.tronWeb && window.tronWeb.fullNode && window.tronWeb.fullNode.host) {
+        baseUrl = window.tronWeb.fullNode.host;
+    }
     
     // Convert Tron address to hex (41...) then to Eth address (0x...)
-    const addressHex = window.tronWeb.address.toHex(contractAddress);
-    const ethAddress = '0x' + addressHex.substring(2);
+    // Some wallets might not have window.tronWeb.address.toHex ready immediately, use try-catch
+    let ethAddress;
+    try {
+        const addressHex = window.tronWeb.address.toHex(contractAddress);
+        ethAddress = '0x' + addressHex.substring(2);
+    } catch (e) {
+        console.warn("[getStorageAt] Address conversion failed", e);
+        return null;
+    }
     
     // Ensure slot is 0x prefixed
     const ethSlot = slotHex.startsWith('0x') ? slotHex : '0x' + slotHex;
-    
-    const baseUrl = window.tronWeb.fullNode.host;
     const jsonRpcUrl = `${baseUrl}/jsonrpc`;
     
     const payloadRpc = {
@@ -946,17 +955,14 @@ const getTSupplyLength = async () => {
     try {
         const contractAddress = stakingContract.address;
         
-        // Try window.tronWeb.trx.getStorageAt first (if supported by wallet extension/lib)
-        // Note: Slot 24 is decimal 24, need to pad to 32 bytes or just pass number if supported
-        // But eth_getStorageAt requires hex string of slot position
-        
-        // Slot 24 in hex is 0x18
+        // Slot 24 in hex is 0x18. Padded to 32 bytes (64 chars)
         const slotHex = "0x" + Number(24).toString(16).padStart(64, '0');
         
         // 1. Try custom JSON-RPC implementation (more reliable for TronGrid)
         const rpcResult = await getStorageAt(contractAddress, slotHex);
         if (rpcResult) {
-            return parseInt(rpcResult, 16);
+            const len = parseInt(rpcResult, 16);
+            return isNaN(len) ? 0 : len;
         }
 
         // 2. Fallback to tronWeb native if available (some versions)
