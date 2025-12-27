@@ -144,7 +144,7 @@ const contractAddresses = {
     development: 'TVn1MBRBVpGz4v9W5Ykw522KZqgmyKZ9PP',
   },
   stakingHelper: {
-    production: '', 
+    production: 'TTQrpEko4Nppf6sAfDrKq29wNYXGFQKvEU', 
     development: 'TN5Yzxk9nZkv62Jjk9THJ7zBqa6rTDm2eE',
   }
 };
