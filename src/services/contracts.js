@@ -1005,23 +1005,6 @@ export const getFrontendQuotaLimit = async (forceRefresh = false) => {
             getOspReserveU(forceRefresh)
         ]);
         
-        // Debug Log for t_supply and related data
-        if (stakingContract) {
-            getTSupplyLength().then(async (len) => {
-                console.log(`[Staking Debug] t_supply length (Slot 24): ${len}`);
-                // Try to fetch the last item if length > 0 for verification
-                if (len > 0) {
-                   try {
-                       const lastIndex = len - 1;
-                       const lastItem = await stakingContract.t_supply(lastIndex).call();
-                       console.log(`[Staking Debug] t_supply[${lastIndex}]:`, lastItem);
-                   } catch(e) {
-                       console.warn("[Staking Debug] Failed to fetch last t_supply item", e);
-                   }
-                }
-            });
-        }
-
         // 1. 6 Minute Limit: 0.06% of ReserveU
         const limit6Min = reserveU.times(0.0006);
         let available6Min;
