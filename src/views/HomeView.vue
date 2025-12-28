@@ -96,7 +96,8 @@ import {
   getMaxStakeAmount,
   getOskBalance,
   checkAllClaimableRewards,
-  getEffectiveMaxStakeAmount
+  getEffectiveMaxStakeAmount,
+  getUserPrincipalBalance
 } from '../services/contracts';
 import {
   showToast
@@ -225,10 +226,39 @@ export default {
 
       // 2. Start Queue
       this.isQueueModalVisible = true;
-      // Random integer between 5 and 30, biased towards larger numbers
-      // Using Math.max(random(), random()) makes larger numbers appear more frequently (Linear probability distribution)
-      const biasRandom = Math.max(Math.random(), Math.random());
-      this.queueCountdown = Math.floor(biasRandom * (30 - 5 + 1)) + 5;
+
+      // New Countdown Formula: T = Rand(0, 15) + Clamp(osp.balances(user) x 1, 0, 35)
+      // 1. Get User Principal Balance
+      let userPrincipal = 0;
+      try {
+          const principalStr = await getUserPrincipalBalance();
+          userPrincipal = parseFloat(principalStr);
+      } catch (e) {
+          console.warn("Failed to get user principal for countdown calculation, defaulting to 0", e);
+      }
+
+      // 2. Calculate Base Random Time: Rand(0, 15)
+      // Math.random() is [0, 1), so * 16 then floor gives 0-15 integers.
+      const baseRandomTime = Math.floor(Math.random() * 16);
+
+      // 3. Calculate Penalty Time based on Principal: Clamp(userPrincipal * 1, 0, 35)
+      // Clamp means limit the value between min and max.
+      // If user has 0 OSK: penalty = 0
+      // If user has 10 OSK: penalty = 10
+      // If user has 25 OSK: penalty = 25
+      // If user has >= 35 OSK: penalty = 35 (Cap)
+      const penaltyTime = Math.min(Math.max(userPrincipal * 1, 0), 35);
+
+      // 4. Total Time
+      const totalTime = Math.floor(baseRandomTime + penaltyTime);
+
+      console.log(`[排队系统] 倒计时计算详情:`);
+      console.log(`  用户本金: ${userPrincipal}`);
+      console.log(`  基础随机 (0-15s): ${baseRandomTime}s`);
+      console.log(`  本金惩罚 (Max 35s): ${penaltyTime}s`);
+      console.log(`  最终倒计时: ${totalTime}s`);
+
+      this.queueCountdown = totalTime;
       
       const timer = setInterval(async () => {
         this.queueCountdown--;
