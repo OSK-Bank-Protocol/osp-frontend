@@ -999,46 +999,37 @@ export const getNetworkIn2Hours = async (forceRefresh = false) => {
 export const getFrontendQuotaLimit = async (forceRefresh = false) => {
     try {
         if (!window.tronWeb) return "0";
-        const [netIn6Min, netIn2Hours, reserveU] = await Promise.all([
+        const [netIn6Min, netIn2Hours] = await Promise.all([
             getNetwork1In(forceRefresh),
-            getNetworkIn2Hours(forceRefresh),
-            getOspReserveU(forceRefresh)
+            getNetworkIn2Hours(forceRefresh)
         ]);
         
-        // 1. 6 Minute Limit: 0.06% of ReserveU
-        const limit6Min = reserveU.times(0.0006);
+        const decimals = 18; // OSK decimals
+        const BigNumber = window.tronWeb.BigNumber;
+
+        // 1. 6 Minute Limit: Fixed 4 OSK
+        const limit6Min = new BigNumber(4).times(new BigNumber(10).pow(decimals));
         let available6Min;
         if (netIn6Min.gte(limit6Min)) {
-            available6Min = window.tronWeb.BigNumber(0);
+            available6Min = new BigNumber(0);
         } else {
             available6Min = limit6Min.minus(netIn6Min);
         }
 
-        // Apply 100 ether cap to 6 min limit
-        // 100 ether = 100 * 10^18
-        const cap = window.tronWeb.BigNumber(100).times(window.tronWeb.BigNumber(10).pow(18));
-        
-        if (available6Min.gt(cap)) {
-            available6Min = cap;
-        }
-
-        // 2. 2 Hour Limit: 1.2% of ReserveU
-        const limit2Hours = reserveU.times(0.012);
+        // 2. 2 Hour Limit: Fixed 80 OSK
+        const limit2Hours = new BigNumber(80).times(new BigNumber(10).pow(decimals));
 
         console.log(`[2 Hour Limit Debug] Raw Data:`);
-        console.log(`  reserveU (Wei): ${reserveU.toString()}`);
-        console.log(`  reserveU (Formatted): ${formatUnits(reserveU, 18)}`);
         console.log(`  netIn2Hours (Wei): ${netIn2Hours.toString()}`);
         console.log(`  netIn2Hours (Formatted): ${formatUnits(netIn2Hours, 18)}`);
         
         console.log(`[2 Hour Limit Debug] Calculation Intermediate Values:`);
-        console.log(`  Multiplier: 1.2% (0.012)`);
-        console.log(`  limit2Hours (reserveU * 0.012) (Wei): ${limit2Hours.toString()}`);
-        console.log(`  limit2Hours (Formatted): ${formatUnits(limit2Hours, 18)}`);
+        console.log(`  Fixed Limit: 80 OSK`);
+        console.log(`  limit2Hours (Wei): ${limit2Hours.toString()}`);
 
         let available2Hours;
         if (netIn2Hours.gte(limit2Hours)) {
-            available2Hours = window.tronWeb.BigNumber(0);
+            available2Hours = new BigNumber(0);
             console.log(`[2 Hour Limit Debug] Result: netIn2Hours >= limit2Hours => available2Hours = 0`);
         } else {
             available2Hours = limit2Hours.minus(netIn2Hours);
@@ -1049,11 +1040,11 @@ export const getFrontendQuotaLimit = async (forceRefresh = false) => {
 
         // Take the smaller of the two time-based limits
         let available = available6Min;
-        let limitType = "6分钟限制 (0.06%)";
+        let limitType = "6分钟限制 (4 OSK)";
         
         if (available2Hours.lt(available)) {
             available = available2Hours;
-            limitType = "2小时限制 (1.2%)";
+            limitType = "2小时限制 (80 OSK)";
         }
         
         console.log(`[额度调试] 6分钟剩余: ${formatUnits(available6Min, 18)}, 2小时剩余: ${formatUnits(available2Hours, 18)}, 当前时间窗口限制采用: ${limitType}`);
