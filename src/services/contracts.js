@@ -1024,11 +1024,27 @@ export const getFrontendQuotaLimit = async (forceRefresh = false) => {
 
         // 2. 2 Hour Limit: 1.2% of ReserveU
         const limit2Hours = reserveU.times(0.012);
+
+        console.log(`[2 Hour Limit Debug] Raw Data:`);
+        console.log(`  reserveU (Wei): ${reserveU.toString()}`);
+        console.log(`  reserveU (Formatted): ${formatUnits(reserveU, 18)}`);
+        console.log(`  netIn2Hours (Wei): ${netIn2Hours.toString()}`);
+        console.log(`  netIn2Hours (Formatted): ${formatUnits(netIn2Hours, 18)}`);
+        
+        console.log(`[2 Hour Limit Debug] Calculation Intermediate Values:`);
+        console.log(`  Multiplier: 1.2% (0.012)`);
+        console.log(`  limit2Hours (reserveU * 0.012) (Wei): ${limit2Hours.toString()}`);
+        console.log(`  limit2Hours (Formatted): ${formatUnits(limit2Hours, 18)}`);
+
         let available2Hours;
         if (netIn2Hours.gte(limit2Hours)) {
             available2Hours = window.tronWeb.BigNumber(0);
+            console.log(`[2 Hour Limit Debug] Result: netIn2Hours >= limit2Hours => available2Hours = 0`);
         } else {
             available2Hours = limit2Hours.minus(netIn2Hours);
+            console.log(`[2 Hour Limit Debug] Result: available2Hours = limit2Hours - netIn2Hours`);
+            console.log(`  available2Hours (Wei): ${available2Hours.toString()}`);
+            console.log(`  available2Hours (Formatted): ${formatUnits(available2Hours, 18)}`);
         }
 
         // Take the smaller of the two time-based limits
