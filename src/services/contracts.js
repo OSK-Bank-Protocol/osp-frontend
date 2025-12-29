@@ -897,11 +897,19 @@ export const getOspReserveU = async (forceRefresh = false) => {
 
 // Helper to get storage value from Tron RPC
 export const getStorageAt = async (contractAddress, slotHex) => {
-    // Determine RPC URL: Try wallet provider first, fallback to TronGrid
+    // Determine RPC URL: Always use TronGrid (default API) to avoid CORS issues with wallet-specific RPCs (like TP)
+    // Especially because we inject the TRON-PRO-API-KEY header which some wallet nodes don't accept in CORS preflight.
     let baseUrl = 'https://api.trongrid.io';
-    if (window.tronWeb && window.tronWeb.fullNode && window.tronWeb.fullNode.host) {
-        baseUrl = window.tronWeb.fullNode.host;
+    
+    // If not production, default to Nile testnet (matching wallet.js config)
+    if (APP_ENV !== 'PROD') {
+        baseUrl = 'https://nile.trongrid.io';
     }
+
+    // Previous logic used wallet provider host, but this causes CORS issues on TP wallet.
+    // if (window.tronWeb && window.tronWeb.fullNode && window.tronWeb.fullNode.host) {
+    //     baseUrl = window.tronWeb.fullNode.host;
+    // }
     
     // Convert Tron address to hex (41...) then to Eth address (0x...)
     // Some wallets might not have window.tronWeb.address.toHex ready immediately, use try-catch
