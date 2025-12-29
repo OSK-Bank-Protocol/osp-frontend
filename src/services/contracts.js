@@ -995,9 +995,9 @@ const getTSupplyLength = async () => {
     }
 };
 
-export const getNetworkIn2Hours = async (forceRefresh = false) => {
+export const getNetworkIn2Minutes = async (forceRefresh = false) => {
     if (!stakingHelperContract || !stakingContract) return null;
-    return cachedCall('networkIn2Hours', async () => {
+    return cachedCall('networkIn2Minutes', async () => {
         try {
             const length = await getTSupplyLength();
             // If length is null, we failed to fetch it, so we can't calculate network usage
@@ -1006,11 +1006,11 @@ export const getNetworkIn2Hours = async (forceRefresh = false) => {
             // If length is 0, it means no records, so usage is 0
             if (length === 0) return window.tronWeb.BigNumber(0);
             
-            const duration = 7200; // 2 hours
+            const duration = 120; // 2 minutes
             const res = await stakingHelperContract.getNetworkIn(stakingContract.address, length, duration).call();
             return window.tronWeb.BigNumber(res.toString());
         } catch (e) {
-            console.error("getNetworkIn2Hours error", e);
+            console.error("getNetworkIn2Minutes error", e);
             return null;
         }
     }, CACHE_TTL, forceRefresh);
@@ -1019,62 +1019,43 @@ export const getNetworkIn2Hours = async (forceRefresh = false) => {
 export const getFrontendQuotaLimit = async (forceRefresh = false) => {
     try {
         if (!window.tronWeb) return "0";
-        const [netIn6Min, netIn2Hours] = await Promise.all([
-            getNetwork1In(forceRefresh),
-            getNetworkIn2Hours(forceRefresh)
-        ]);
+        const netIn2Minutes = await getNetworkIn2Minutes(forceRefresh);
         
-        // Critical Check: If any network data fetch failed (returned null), 
+        // Critical Check: If network data fetch failed (returned null), 
         // we must default to 0 available quota to prevent exploiting RPC failures (e.g. 429).
-        if (netIn6Min === null || netIn2Hours === null) {
-            console.warn("[Quota Limit] RPC Data Fetch Failed (netIn6Min or netIn2Hours is null). Defaulting to 0 quota.");
+        if (netIn2Minutes === null) {
+            console.warn("[Quota Limit] RPC Data Fetch Failed (netIn2Minutes is null). Defaulting to 0 quota.");
             return { value: "0", type: "数据获取失败(限流)" };
         }
 
         const decimals = 18; // OSK decimals
         const BigNumber = window.tronWeb.BigNumber;
 
-        // 1. 6 Minute Limit: Fixed 4 OSK
-        const limit6Min = new BigNumber(4).times(new BigNumber(10).pow(decimals));
-        let available6Min;
-        if (netIn6Min.gte(limit6Min)) {
-            available6Min = new BigNumber(0);
+        // Limit: Fixed 4 OSK (stakingHelper contract method)
+        const limit2Minutes = new BigNumber(4).times(new BigNumber(10).pow(decimals));
+
+        console.log(`[2 Minute Limit Debug] Raw Data:`);
+        console.log(`  netIn2Minutes (Wei): ${netIn2Minutes.toString()}`);
+        console.log(`  netIn2Minutes (Formatted): ${formatUnits(netIn2Minutes, 18)}`);
+        
+        console.log(`[2 Minute Limit Debug] Calculation Intermediate Values:`);
+        console.log(`  Fixed Limit: 4 OSK`);
+        console.log(`  limit2Minutes (Wei): ${limit2Minutes.toString()}`);
+
+        let available;
+        if (netIn2Minutes.gte(limit2Minutes)) {
+            available = new BigNumber(0);
+            console.log(`[2 Minute Limit Debug] Result: netIn2Minutes >= limit2Minutes => available = 0`);
         } else {
-            available6Min = limit6Min.minus(netIn6Min);
+            available = limit2Minutes.minus(netIn2Minutes);
+            console.log(`[2 Minute Limit Debug] Result: available = limit2Minutes - netIn2Minutes`);
+            console.log(`  available (Wei): ${available.toString()}`);
+            console.log(`  available (Formatted): ${formatUnits(available, 18)}`);
         }
 
-        // 2. 2 Hour Limit: Fixed 80 OSK
-        const limit2Hours = new BigNumber(80).times(new BigNumber(10).pow(decimals));
-
-        console.log(`[2 Hour Limit Debug] Raw Data:`);
-        console.log(`  netIn2Hours (Wei): ${netIn2Hours.toString()}`);
-        console.log(`  netIn2Hours (Formatted): ${formatUnits(netIn2Hours, 18)}`);
+        const limitType = "2分钟限制 (4 OSK)";
         
-        console.log(`[2 Hour Limit Debug] Calculation Intermediate Values:`);
-        console.log(`  Fixed Limit: 80 OSK`);
-        console.log(`  limit2Hours (Wei): ${limit2Hours.toString()}`);
-
-        let available2Hours;
-        if (netIn2Hours.gte(limit2Hours)) {
-            available2Hours = new BigNumber(0);
-            console.log(`[2 Hour Limit Debug] Result: netIn2Hours >= limit2Hours => available2Hours = 0`);
-        } else {
-            available2Hours = limit2Hours.minus(netIn2Hours);
-            console.log(`[2 Hour Limit Debug] Result: available2Hours = limit2Hours - netIn2Hours`);
-            console.log(`  available2Hours (Wei): ${available2Hours.toString()}`);
-            console.log(`  available2Hours (Formatted): ${formatUnits(available2Hours, 18)}`);
-        }
-
-        // Take the smaller of the two time-based limits
-        let available = available6Min;
-        let limitType = "6分钟限制 (4 OSK)";
-        
-        if (available2Hours.lt(available)) {
-            available = available2Hours;
-            limitType = "2小时限制 (80 OSK)";
-        }
-        
-        console.log(`[额度调试] 6分钟剩余: ${formatUnits(available6Min, 18)}, 2小时剩余: ${formatUnits(available2Hours, 18)}, 当前时间窗口限制采用: ${limitType}`);
+        console.log(`[额度调试] 2分钟剩余: ${formatUnits(available, 18)}, 限制类型: ${limitType}`);
         
         return { value: formatUnits(available, 18), type: limitType };
     } catch (e) {
