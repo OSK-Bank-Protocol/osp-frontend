@@ -1101,6 +1101,7 @@ export const getMaxStakeAmount = async (forceRefresh = false) => {
   return cachedCall('maxStakeAmount', async () => {
     try {
         const maxStake = await stakingContract.maxStakeAmount().call();
+        console.log(`[质押合约硬顶] 原始值: ${maxStake.toString()}, 格式化后: ${formatUnits(maxStake, getOskDecimals())}`);
         return formatUnits(maxStake, getOskDecimals());
     } catch (error) {
         return "0";
