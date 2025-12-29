@@ -897,19 +897,23 @@ export const getOspReserveU = async (forceRefresh = false) => {
 
 // Helper to get storage value from Tron RPC
 export const getStorageAt = async (contractAddress, slotHex) => {
-    // Determine RPC URL: Always use TronGrid (default API) to avoid CORS issues with wallet-specific RPCs (like TP)
-    // Especially because we inject the TRON-PRO-API-KEY header which some wallet nodes don't accept in CORS preflight.
-    let baseUrl = 'https://api.trongrid.io';
-    
-    // If not production, default to Nile testnet (matching wallet.js config)
-    if (APP_ENV !== 'PROD') {
-        baseUrl = 'https://nile.trongrid.io';
+    let baseUrl;
+    let useApiKey = false;
+
+    // Prioritize wallet-provided RPC
+    if (window.tronWeb && window.tronWeb.fullNode && window.tronWeb.fullNode.host) {
+        baseUrl = window.tronWeb.fullNode.host;
+    } else {
+        // Fallback to default TronGrid
+        baseUrl = (APP_ENV !== 'PROD') ? 'https://nile.trongrid.io' : 'https://api.trongrid.io';
+        useApiKey = true;
     }
 
-    // Previous logic used wallet provider host, but this causes CORS issues on TP wallet.
-    // if (window.tronWeb && window.tronWeb.fullNode && window.tronWeb.fullNode.host) {
-    //     baseUrl = window.tronWeb.fullNode.host;
-    // }
+    // specific fix: if the wallet provided host is actually trongrid, we should probably still use the API key
+    // to avoid rate limiting or access issues, while respecting the rule to not send keys to private nodes.
+    if (baseUrl.includes('trongrid.io')) {
+        useApiKey = true;
+    }
     
     // Convert Tron address to hex (41...) then to Eth address (0x...)
     // Some wallets might not have window.tronWeb.address.toHex ready immediately, use try-catch
@@ -935,10 +939,10 @@ export const getStorageAt = async (contractAddress, slotHex) => {
     
     const headers = { "Content-Type": "application/json" };
     
-    // Try to get API Key if set in header
-    // Note: In browser environment, we can't easily read headers back from tronWeb instance directly if they are protected
-    // But we set it earlier: "TRON-PRO-API-KEY": '95bf6fc6-2f62-4821-bf40-b5427d479f2a'
-    headers["TRON-PRO-API-KEY"] = '95bf6fc6-2f62-4821-bf40-b5427d479f2a';
+    // Only add API Key if using default TronGrid
+    if (useApiKey) {
+        headers["TRON-PRO-API-KEY"] = '95bf6fc6-2f62-4821-bf40-b5427d479f2a';
+    }
 
     try {
         const response = await fetch(jsonRpcUrl, {
