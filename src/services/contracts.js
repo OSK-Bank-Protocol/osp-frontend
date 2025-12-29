@@ -92,6 +92,7 @@ import nodePoolAbi from '../abis/node_pool.json';
 import nodeDividendPoolAbi from '../abis/node_dividend_pool.json';
 import routerAbi from '../abis/router.json';
 import stakingHelperAbi from '../abis/staking_helper.json';
+import dynamicConfigAbi from '../abis/dynamicConfig.json';
 
 // Select staking ABI based on environment
 const stakingAbi = APP_ENV === 'PROD' ? stakingAbiMain : stakingAbiTest;
@@ -112,7 +113,7 @@ const contractAddresses = {
     development: 'TXuiVNDo1amHwE2zDhi6oDLMRGY1xPmSGx',
   },
   osk: {
-    production: 'TDk91SWz2GvwfZwMTGX21d4ngUUH8YZZAv',
+    production: 'TDk91SWz2GvwfZwMTGX21d4ngUUH8YZZAv', 
     development: 'TCGMQinLjQLkHhp5kYoTWREWktn5jGwyvY',
   },
   router: {
@@ -146,6 +147,10 @@ const contractAddresses = {
   stakingHelper: {
     production: 'TTQrpEko4Nppf6sAfDrKq29wNYXGFQKvEU', 
     development: 'TN5Yzxk9nZkv62Jjk9THJ7zBqa6rTDm2eE',
+  },
+  dynamicConfig: {
+    production: '', // Pending PROD address
+    development: 'TQhbRrap82Ci8Cp3Hcw1xC1gUA3uQxZNQ9',
   }
 };
 
@@ -161,8 +166,9 @@ let s7poolContract;
 let nodePoolContract;
 let nodeDividendPoolContract;
 let stakingHelperContract;
+let dynamicConfigContract;
 
-export { referralContract, stakingContract, ospContract, oskContract, s5poolContract, s6poolContract, s7poolContract, nodePoolContract, nodeDividendPoolContract, stakingHelperContract };
+export { referralContract, stakingContract, ospContract, oskContract, s5poolContract, s6poolContract, s7poolContract, nodePoolContract, nodeDividendPoolContract, stakingHelperContract, dynamicConfigContract };
 
 // --- KPI Thresholds ---
 // Note: These need to be checked if they are OSP or OSK values and adjusted for precision
@@ -273,6 +279,7 @@ export const initializeContracts = async () => {
   nodePoolContract = await initSafe(contractAddresses.nodePool[env], 'nodePool', nodePoolAbi);
   nodeDividendPoolContract = await initSafe(contractAddresses.nodeDividendPool[env], 'nodeDividendPool', nodeDividendPoolAbi);
   stakingHelperContract = await initSafe(contractAddresses.stakingHelper[env], 'stakingHelper', stakingHelperAbi);
+  dynamicConfigContract = await initSafe(contractAddresses.dynamicConfig[env], 'dynamicConfig', dynamicConfigAbi);
 
   walletState.contractsInitialized = true;
   console.log("[合约] 初始化流程结束 (部分可能因地址错误跳过)");
@@ -290,6 +297,7 @@ export const resetContracts = () => {
   nodePoolContract = null;
   nodeDividendPoolContract = null;
   stakingHelperContract = null;
+  dynamicConfigContract = null;
   console.log("Contract instances have been reset.");
 };
 
@@ -887,6 +895,8 @@ export const getOspReserveU = async (forceRefresh = false) => {
     return cachedCall('ospReserveU', async () => {
         try {
             const res = await ospContract.getReserveU().call();
+            const formatted = formatUnits(res, 18);
+            console.log(`[池子状态] 当前池子大小 (ospReserveU): ${formatted} OSK`);
             return window.tronWeb.BigNumber(res.toString());
         } catch (e) {
             console.error("getOspReserveU error", e);
@@ -995,69 +1005,156 @@ const getTSupplyLength = async () => {
     }
 };
 
-export const getNetworkIn2Minutes = async (forceRefresh = false) => {
-    if (!stakingHelperContract || !stakingContract) return null;
-    return cachedCall('networkIn2Minutes', async () => {
+/**
+ * Fetch Configs from DynamicConfig Contract
+ */
+export const getDynamicConfigs = async (forceRefresh = false) => {
+    if (!dynamicConfigContract) return null;
+    return cachedCall('dynamicConfigs', async () => {
         try {
-            const length = await getTSupplyLength();
-            // If length is null, we failed to fetch it, so we can't calculate network usage
-            if (length === null) return null;
+            const configs = await dynamicConfigContract.getAllConfigs().call();
             
-            // If length is 0, it means no records, so usage is 0
-            if (length === 0) return window.tronWeb.BigNumber(0);
+            // Map the struct response (array or object depending on TronWeb version/setup)
+            // Struct: maxPoolLimit, singleStakeLimit, stakeRateLimitDuration, stakeRateLimitAmount, exhaustedStakeLimit
             
-            const duration = 120; // 2 minutes
-            const res = await stakingHelperContract.getNetworkIn(stakingContract.address, length, duration).call();
-            return window.tronWeb.BigNumber(res.toString());
+            // Safe extraction helper
+            const extract = (key, index) => {
+                if (configs[key]) return configs[key];
+                if (configs[index]) return configs[index];
+                return 0; // Default
+            };
+
+            const result = {
+                maxPoolLimit: window.tronWeb.BigNumber(extract('maxPoolLimit', 0).toString()),
+                singleStakeLimit: window.tronWeb.BigNumber(extract('singleStakeLimit', 1).toString()),
+                stakeRateLimitDuration: window.tronWeb.BigNumber(extract('stakeRateLimitDuration', 2).toString()),
+                stakeRateLimitAmount: window.tronWeb.BigNumber(extract('stakeRateLimitAmount', 3).toString()),
+                exhaustedStakeLimit: window.tronWeb.BigNumber(extract('exhaustedStakeLimit', 4).toString()),
+            };
+            
+            console.log(`[动态配置] 获取成功:
+                池子上限 (maxPoolLimit): ${result.maxPoolLimit.toString()}
+                单笔限额 (singleStakeLimit): ${result.singleStakeLimit.toString()}
+                限频时长 (stakeRateLimitDuration): ${result.stakeRateLimitDuration.toString()}秒
+                限频额度 (stakeRateLimitAmount): ${result.stakeRateLimitAmount.toString()}
+                耗尽低保 (exhaustedStakeLimit): ${result.exhaustedStakeLimit.toString()} (对应 ${result.exhaustedStakeLimit.div(100).toString()} OSK)
+            `);
+            
+            return result;
         } catch (e) {
-            console.error("getNetworkIn2Minutes error", e);
+            console.error("getDynamicConfigs error", e);
             return null;
         }
     }, CACHE_TTL, forceRefresh);
 };
 
+export const getNetworkInDuration = async (durationSeconds, forceRefresh = false) => {
+    if (!stakingHelperContract || !stakingContract) return null;
+    return cachedCall(`networkIn_${durationSeconds}`, async () => {
+        try {
+            const length = await getTSupplyLength();
+            if (length === null) return null;
+            if (length === 0) return window.tronWeb.BigNumber(0);
+            
+            const res = await stakingHelperContract.getNetworkIn(stakingContract.address, length, durationSeconds).call();
+            return window.tronWeb.BigNumber(res.toString());
+        } catch (e) {
+            console.error(`getNetworkInDuration(${durationSeconds}) error`, e);
+            return null;
+        }
+    }, CACHE_TTL, forceRefresh);
+};
+
+export const getNetworkIn2Minutes = async (forceRefresh = false) => {
+    // Wrapper for backward compatibility or direct use
+    return getNetworkInDuration(120, forceRefresh);
+};
+
 export const getFrontendQuotaLimit = async (forceRefresh = false) => {
     try {
         if (!window.tronWeb) return "0";
-        const netIn2Minutes = await getNetworkIn2Minutes(forceRefresh);
+
+        // 1. Fetch Dynamic Configs
+        const configs = await getDynamicConfigs(forceRefresh);
+        const decimals = 18;
+        const BigNumber = window.tronWeb.BigNumber;
         
-        // Critical Check: If network data fetch failed (returned null), 
-        // we must default to 0 available quota to prevent exploiting RPC failures (e.g. 429).
-        if (netIn2Minutes === null) {
-            console.warn("[Quota Limit] RPC Data Fetch Failed (netIn2Minutes is null). Defaulting to 0 quota.");
+        // Defaults if config fails
+        let duration = 120;
+        let limitAmount = new BigNumber(4).times(new BigNumber(10).pow(decimals));
+        let maxPoolLimit = new BigNumber(7500).times(new BigNumber(10).pow(decimals)); // Default large enough? Or 0?
+        let exhaustedLimit = new BigNumber(0);
+
+        if (configs) {
+            // Configs are BigNumbers from TronWeb
+            const d = configs.stakeRateLimitDuration.toNumber();
+            if (d > 0) duration = d;
+            
+            // Limit Amount is in OSK units -> convert to Wei
+            limitAmount = configs.stakeRateLimitAmount.times(new BigNumber(10).pow(decimals));
+            
+            // Max Pool Limit is in OSK units -> convert to Wei
+            maxPoolLimit = configs.maxPoolLimit.times(new BigNumber(10).pow(decimals));
+            
+            // Exhausted Limit is in Cent-OSK units (50 -> 0.5) -> convert to Wei
+            // 50 / 100 * 10^18 = 50 * 10^16
+            exhaustedLimit = configs.exhaustedStakeLimit.times(new BigNumber(10).pow(16));
+        }
+
+        // 2. Fetch Network Usage
+        const netInDuration = await getNetworkInDuration(duration, forceRefresh);
+        
+        if (netInDuration === null) {
+            console.warn("[Quota Limit] RPC Data Fetch Failed. Defaulting to 0.");
             return { value: "0", type: "数据获取失败(限流)" };
         }
 
-        const decimals = 18; // OSK decimals
-        const BigNumber = window.tronWeb.BigNumber;
+        // 3. Fetch Pool Reserve
+        const poolReserveU = await getOspReserveU(forceRefresh); // Returns Wei BigNumber
 
-        // Limit: Fixed 4 OSK (stakingHelper contract method)
-        const limit2Minutes = new BigNumber(4).times(new BigNumber(10).pow(decimals));
+        console.log(`[额度计算]
+            配置时长: ${duration}s
+            配置限额: ${formatUnits(limitAmount, 18)} OSK
+            当前用量: ${formatUnits(netInDuration, 18)} OSK
+            池子上限: ${formatUnits(maxPoolLimit, 18)} OSK
+            当前池子: ${formatUnits(poolReserveU, 18)} OSK
+            低保额度: ${formatUnits(exhaustedLimit, 18)} OSK
+        `);
 
-        console.log(`[2 Minute Limit Debug] Raw Data:`);
-        console.log(`  netIn2Minutes (Wei): ${netIn2Minutes.toString()}`);
-        console.log(`  netIn2Minutes (Formatted): ${formatUnits(netIn2Minutes, 18)}`);
+        // 4. Calculate Quotas
         
-        console.log(`[2 Minute Limit Debug] Calculation Intermediate Values:`);
-        console.log(`  Fixed Limit: 4 OSK`);
-        console.log(`  limit2Minutes (Wei): ${limit2Minutes.toString()}`);
-
-        let available;
-        if (netIn2Minutes.gte(limit2Minutes)) {
-            available = new BigNumber(0);
-            console.log(`[2 Minute Limit Debug] Result: netIn2Minutes >= limit2Minutes => available = 0`);
-        } else {
-            available = limit2Minutes.minus(netIn2Minutes);
-            console.log(`[2 Minute Limit Debug] Result: available = limit2Minutes - netIn2Minutes`);
-            console.log(`  available (Wei): ${available.toString()}`);
-            console.log(`  available (Formatted): ${formatUnits(available, 18)}`);
+        // A. Rate Limit Quota
+        let rateLimitQuota = new BigNumber(0);
+        if (limitAmount.gt(netInDuration)) {
+            rateLimitQuota = limitAmount.minus(netInDuration);
         }
 
-        const limitType = "2分钟限制 (4 OSK)";
+        // B. Pool Limit Quota (Is pool full?)
+        // If Reserve < Max, then OK. Quota effectively unlimited by pool? 
+        // User said: "if ... getReserveU ... smaller than maxPoolLimit, then open quota, otherwise no quota"
+        // This implies if Reserve >= Max, quota is 0.
+        // If Reserve < Max, quota is determined by Rate Limit.
         
-        console.log(`[额度调试] 2分钟剩余: ${formatUnits(available, 18)}, 限制类型: ${limitType}`);
+        let isPoolFull = poolReserveU.gte(maxPoolLimit);
         
-        return { value: formatUnits(available, 18), type: limitType };
+        let baseQuota = isPoolFull ? new BigNumber(0) : rateLimitQuota;
+        
+        // 5. Apply Exhausted Limit Logic
+        // "if quota exhausted (or pool full), show exhaustedStakeLimit"
+        // This acts as a floor for the quota, assuming strict > 0 check isn't intended to block completely if we have exhausted limit.
+        // Wait, if baseQuota is 0, we use exhaustedLimit.
+        // If baseQuota > 0, do we take max(baseQuota, exhaustedLimit)? Yes, probably.
+        
+        let finalQuota = baseQuota;
+        if (finalQuota.lt(exhaustedLimit)) {
+             finalQuota = exhaustedLimit;
+             console.log(`[额度计算] 触发低保/耗尽额度: ${formatUnits(exhaustedLimit, 18)}`);
+        }
+        
+        const limitType = `${duration / 60}分钟限制`;
+        
+        return { value: formatUnits(finalQuota, 18), type: limitType };
+        
     } catch (e) {
         console.error("Quota limit calc error", e);
         return { value: "0", type: "Error" };
@@ -1070,6 +1167,14 @@ export const getEffectiveMaxStakeAmount = async (forceRefresh = false) => {
     const frontendMaxStr = typeof quotaResult === 'object' ? quotaResult.value : quotaResult;
     const timeLimitType = typeof quotaResult === 'object' ? quotaResult.type : "未知时间限制";
     
+    // Get Dynamic Single Limit
+    const configs = await getDynamicConfigs(forceRefresh);
+    let singleLimitStr = null;
+    if (configs && configs.singleStakeLimit.gt(0)) {
+         // singleStakeLimit is OSK units
+         singleLimitStr = configs.singleStakeLimit.toString(); 
+    }
+
     const contractMax = parseFloat(contractMaxStr);
     const frontendMax = parseFloat(frontendMaxStr);
     
@@ -1085,9 +1190,16 @@ export const getEffectiveMaxStakeAmount = async (forceRefresh = false) => {
 
     // Apply Single Purchase Limit if enabled
     if (ENABLE_SINGLE_PURCHASE_LIMIT) {
-        if (SINGLE_PURCHASE_LIMIT < effective) {
-            effective = SINGLE_PURCHASE_LIMIT;
-            winningLimit = `单笔购买限制 (${SINGLE_PURCHASE_LIMIT})`;
+        let limitVal = SINGLE_PURCHASE_LIMIT;
+        
+        // Use Dynamic Limit if available
+        if (singleLimitStr) {
+            limitVal = parseFloat(singleLimitStr);
+        }
+        
+        if (limitVal < effective) {
+            effective = limitVal;
+            winningLimit = `单笔购买限制 (${limitVal})`;
         }
     }
     
@@ -1101,7 +1213,9 @@ export const getMaxStakeAmount = async (forceRefresh = false) => {
   return cachedCall('maxStakeAmount', async () => {
     try {
         const maxStake = await stakingContract.maxStakeAmount().call();
-        return formatUnits(maxStake, getOskDecimals());
+        const formatted = formatUnits(maxStake, getOskDecimals());
+        console.log(`[合约参数] maxStakeAmount (合约硬顶): ${formatted}`);
+        return formatted;
     } catch (error) {
         return "0";
     }

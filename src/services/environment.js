@@ -50,7 +50,7 @@ export const ENABLE_SINGLE_PURCHASE_LIMIT = true;
  * Single purchase limit configuration
  * The maximum amount (in OSK) for a single stake transaction.
  */
-export const SINGLE_PURCHASE_LIMIT = 4;
+export const SINGLE_PURCHASE_LIMIT = 2.2;
 
 /**
  * Enable staking queue frequency control
