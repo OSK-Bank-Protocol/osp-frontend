@@ -68,7 +68,7 @@ export default {
             } else {
                 envPrefix = 'D'; // Dev/Local
             }
-            const version = '1.0.6';
+            const version = '1.0.7';
             return `${this.t('footer.copyright')} ${envPrefix}-${version}`;
         }
     },
