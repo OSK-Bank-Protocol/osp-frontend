@@ -25,28 +25,10 @@
               <div class="card-label">{{ t('share.teamId') }}</div>
               <div class="card-value mono">{{ teamId }}</div>
             </div>
-
-            <!-- Rewards Card Removed since no subgraph on Tron -->
-            <!-- <div class="stat-card rewards">
-              <div class="card-bg-glow"></div>
-              <div class="card-content">
-                <div class="card-header">
-                  <span class="label">{{ t('share.rewardsFromFriends') }}</span>
-                  <div class="info-tooltip">
-                    <span class="icon-info">i</span>
-                    <span class="tooltip-text">{{ t('share.rewardsDisclaimer') }}</span>
-                  </div>
-                </div>
-                <div class="value-group">
-                  <span class="value mono highlight">{{ formattedEstimatedRewards }}</span>
-                  <span class="unit">{{ t('common.osp') }}</span>
-                </div>
-              </div>
-            </div> -->
           </div>
 
           <!-- Referrals Slider Section -->
-          <div class="referrals-panel" v-if="false">
+          <div class="referrals-panel">
             <div class="panel-header">
               <span class="panel-title">{{ t('share.myReferralsLabel') }}</span>
               <span class="badge mono">{{ formattedReferralCount }}</span>
@@ -124,9 +106,15 @@
 <script>
 import { onMounted, onUnmounted, computed, ref, watch } from 'vue';
 import { t } from '@/i18n';
-// import { getReferralsFromSubgraph } from '@/services/subgraph'; // Removed subgraph
 import { walletState } from '@/services/wallet';
-import { getTeamKpiByAddress, getUserStakedBalanceByAddress, formatUnits } from '@/services/contracts';
+import { 
+    referralContract, 
+    getTeamKpiByAddress, 
+    getUserStakedBalanceByAddress, 
+    formatUnits,
+    getStorageAt
+} from '@/services/contracts';
+import { ethers } from 'ethers';
 
 export default {
   name: 'FriendsContributionModal',
@@ -138,12 +126,15 @@ export default {
   },
   setup(props, { emit }) {
     const referralCount = ref(0);
-    const referrals = ref([]);
+    const referrals = ref([]); 
     const currentIndex = ref(0);
     const currentReferralKpiRaw = ref(null);
     const currentReferralBalanceRaw = ref(null);
     const isLoadingReferrals = ref(true);
     const estimatedRewards = ref('0');
+    
+    // Tron Storage Slot Logic (BigInt in v6/native)
+    const arrayStartSlot = ref(null);
 
     const close = () => {
       emit('close');
@@ -186,7 +177,7 @@ export default {
     });
 
     const currentReferralAddress = computed(() => {
-      if (referrals.value.length === 0) return '';
+      if (referrals.value.length === 0 || !referrals.value[currentIndex.value]) return t('common.loading') || '...';
       const address = referrals.value[currentIndex.value];
       const prefix = address.slice(0, 6);
       const suffix = address.slice(-4);
@@ -208,36 +199,113 @@ export default {
     const fetchReferralData = async () => {
       isLoadingReferrals.value = true;
       const userAddress = walletState.address;
-      if (!userAddress) {
+      if (!userAddress || !referralContract) {
         isLoadingReferrals.value = false;
         return;
       }
-      // Mock subgraph response for Tron as per previous logic which returned empty or mock data
-      // Since subgraph.js is deleted, we just set empty defaults or implement alternative logic if available
-      // const data = await getReferralsFromSubgraph(userAddress); 
-      const data = { referralCount: 0, referrals: [], estimatedDynamicRewards: '0' }; // Default fallback
-      
-      referralCount.value = data.referralCount;
-      referrals.value = data.referrals;
-      // estimatedRewards.value = data.estimatedDynamicRewards; // Removed subgraph data
-      isLoadingReferrals.value = false;
+
+      try {
+          // 1. Get Count
+          const countBN = await referralContract.getReferralCount(userAddress).call();
+          const count = Number(countBN.toString());
+          referralCount.value = count;
+          
+          if (count === 0) {
+              referrals.value = [];
+              isLoadingReferrals.value = false;
+              return;
+          }
+
+          // Initialize array with nulls
+          referrals.value = new Array(count).fill(null);
+
+          // 2. Calculate Start Slot for _children
+          // mapping(address => address[]) private _children; slot 4
+          const CHILDREN_SLOT = 4;
+          
+          // Ethers v6 Syntax
+          const coder = ethers.AbiCoder.defaultAbiCoder();
+          const slotEncoded = coder.encode(["uint256"], [CHILDREN_SLOT]);
+          
+          // Referrer Address to Hex/Eth format
+          // window.tronWeb is expected to be available
+          if (!window.tronWeb) throw new Error("TronWeb not found");
+          
+          const referrerHex = window.tronWeb.address.toHex(userAddress);
+          const referrerEthAddress = '0x' + referrerHex.substring(2);
+          
+          const keyEncoded = coder.encode(["address"], [referrerEthAddress]);
+          
+          const lengthSlot = ethers.keccak256(ethers.concat([keyEncoded, slotEncoded]));
+          
+          // The array data starts at keccak256(lengthSlot)
+          const arrayStartSlotHash = ethers.keccak256(lengthSlot);
+          arrayStartSlot.value = BigInt(arrayStartSlotHash);
+          
+          isLoadingReferrals.value = false;
+          
+          // Fetch first item immediately
+          await fetchDataForCurrentReferral();
+
+      } catch (error) {
+          console.error("Error fetching referral basics:", error);
+          isLoadingReferrals.value = false;
+      }
     };
 
     const fetchDataForCurrentReferral = async () => {
-      if (referrals.value.length === 0) return;
+      if (referralCount.value === 0) return;
+      
+      const idx = currentIndex.value;
+      
+      // Reset displays while loading
+      currentReferralKpiRaw.value = null;
+      currentReferralBalanceRaw.value = null;
       
       try {
-        const address = referrals.value[currentIndex.value];
-        const [kpi, balance] = await Promise.all([
-          getTeamKpiByAddress(address),
-          getUserStakedBalanceByAddress(address)
-        ]);
-        currentReferralKpiRaw.value = kpi;
-        currentReferralBalanceRaw.value = balance;
+        // 1. Check if we have address
+        let address = referrals.value[idx];
+        
+        if (!address) {
+            // Fetch address from storage
+            if (arrayStartSlot.value === null) return;
+            
+            // Calculate element slot: start + index
+            // Using Native BigInt for v6 compatibility
+            const elementSlotBN = arrayStartSlot.value + BigInt(idx);
+            
+            // Convert to hex string (without 0x prefix for getStorageAt helper if it handles it, 
+            // but our helper expects hex string, possibly 0x prefixed. Let's provide 0x)
+            let elementSlot = elementSlotBN.toString(16);
+            if (elementSlot.length % 2 !== 0) elementSlot = '0' + elementSlot; // padding
+            elementSlot = '0x' + elementSlot;
+
+            const contractAddress = referralContract.address;
+            const val = await getStorageAt(contractAddress, elementSlot);
+            
+            if (val) {
+                const cleanVal = val.startsWith('0x') ? val.substring(2) : val;
+                // Last 20 bytes (40 chars) is address
+                if (cleanVal.length >= 40) {
+                     const addressHex = '41' + cleanVal.substring(cleanVal.length - 40);
+                     address = window.tronWeb.address.fromHex(addressHex);
+                     referrals.value[idx] = address;
+                }
+            }
+        }
+        
+        if (address) {
+            // 2. Fetch Stats
+            const [kpi, balance] = await Promise.all([
+              getTeamKpiByAddress(address),
+              getUserStakedBalanceByAddress(address)
+            ]);
+            currentReferralKpiRaw.value = kpi;
+            currentReferralBalanceRaw.value = balance;
+        }
+
       } catch (error) {
         console.error("Failed to fetch referral data:", error);
-        currentReferralKpiRaw.value = null;
-        currentReferralBalanceRaw.value = null;
       }
     };
 
@@ -245,9 +313,12 @@ export default {
 
     onMounted(async () => {
       document.body.style.overflow = 'hidden';
-      await fetchReferralData();
-      if (referralCount.value > 0) {
-        await fetchDataForCurrentReferral();
+      // Wait for wallet state if needed
+      if (walletState.isAuthenticated) {
+           await fetchReferralData();
+      } else {
+           // Poll briefly or rely on wallet state change elsewhere (though modal usually opens after auth)
+           setTimeout(fetchReferralData, 1000); 
       }
     });
 

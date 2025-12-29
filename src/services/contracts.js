@@ -896,7 +896,7 @@ export const getOspReserveU = async (forceRefresh = false) => {
 };
 
 // Helper to get storage value from Tron RPC
-const getStorageAt = async (contractAddress, slotHex) => {
+export const getStorageAt = async (contractAddress, slotHex) => {
     // Determine RPC URL: Try wallet provider first, fallback to TronGrid
     let baseUrl = 'https://api.trongrid.io';
     if (window.tronWeb && window.tronWeb.fullNode && window.tronWeb.fullNode.host) {
