@@ -908,6 +908,12 @@ export const getStorageAt = async (contractAddress, slotHex) => {
         baseUrl = (APP_ENV !== 'PROD') ? 'https://nile.trongrid.io' : 'https://api.trongrid.io';
         useApiKey = true;
     }
+
+    // specific fix: if the wallet provided host is actually trongrid, we should probably still use the API key
+    // to avoid rate limiting or access issues, while respecting the rule to not send keys to private nodes.
+    if (baseUrl.includes('trongrid.io')) {
+        useApiKey = true;
+    }
     
     // Convert Tron address to hex (41...) then to Eth address (0x...)
     // Some wallets might not have window.tronWeb.address.toHex ready immediately, use try-catch
