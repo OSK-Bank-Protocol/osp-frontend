@@ -869,14 +869,15 @@ export const stakeWithInviter = async (amount, stakeIndex, parentAddress) => {
 };
 
 export const getNetwork1In = async (forceRefresh = false) => {
-    if (!stakingContract) return window.tronWeb ? new window.tronWeb.BigNumber(0) : 0n;
+    if (!stakingContract) return null;
     return cachedCall('network1In', async () => {
         try {
             const res = await stakingContract.network1In().call();
             return window.tronWeb.BigNumber(res.toString()); 
         } catch (e) {
             console.error("getNetwork1In error", e);
-            return window.tronWeb.BigNumber(0);
+            // Return null on error so we don't assume 0 usage (which would allow full quota)
+            return null;
         }
     }, CACHE_TTL, forceRefresh);
 };
@@ -951,7 +952,7 @@ const getStorageAt = async (contractAddress, slotHex) => {
 };
 
 const getTSupplyLength = async () => {
-    if (!stakingContract) return 0;
+    if (!stakingContract) return null;
     try {
         const contractAddress = stakingContract.address;
         
@@ -962,7 +963,9 @@ const getTSupplyLength = async () => {
         const rpcResult = await getStorageAt(contractAddress, slotHex);
         if (rpcResult) {
             const len = parseInt(rpcResult, 16);
-            return isNaN(len) ? 0 : len;
+            // If parsed correctly, return it. If NaN, strictly speaking it's an error in data, 
+            // but we might want to return null to be safe.
+            return isNaN(len) ? null : len;
         }
 
         // 2. Fallback to tronWeb native if available (some versions)
@@ -972,18 +975,23 @@ const getTSupplyLength = async () => {
              // Just retry the original approach as fallback
         }
 
-        return 0;
+        // If we got here, we failed to get the length
+        return null;
     } catch (e) {
         console.warn("Failed to get t_supply length", e);
-        return 0;
+        return null;
     }
 };
 
 export const getNetworkIn2Hours = async (forceRefresh = false) => {
-    if (!stakingHelperContract || !stakingContract) return window.tronWeb ? new window.tronWeb.BigNumber(0) : 0n;
+    if (!stakingHelperContract || !stakingContract) return null;
     return cachedCall('networkIn2Hours', async () => {
         try {
             const length = await getTSupplyLength();
+            // If length is null, we failed to fetch it, so we can't calculate network usage
+            if (length === null) return null;
+            
+            // If length is 0, it means no records, so usage is 0
             if (length === 0) return window.tronWeb.BigNumber(0);
             
             const duration = 7200; // 2 hours
@@ -991,7 +999,7 @@ export const getNetworkIn2Hours = async (forceRefresh = false) => {
             return window.tronWeb.BigNumber(res.toString());
         } catch (e) {
             console.error("getNetworkIn2Hours error", e);
-            return window.tronWeb.BigNumber(0);
+            return null;
         }
     }, CACHE_TTL, forceRefresh);
 };
@@ -1004,6 +1012,13 @@ export const getFrontendQuotaLimit = async (forceRefresh = false) => {
             getNetworkIn2Hours(forceRefresh)
         ]);
         
+        // Critical Check: If any network data fetch failed (returned null), 
+        // we must default to 0 available quota to prevent exploiting RPC failures (e.g. 429).
+        if (netIn6Min === null || netIn2Hours === null) {
+            console.warn("[Quota Limit] RPC Data Fetch Failed (netIn6Min or netIn2Hours is null). Defaulting to 0 quota.");
+            return { value: "0", type: "数据获取失败(限流)" };
+        }
+
         const decimals = 18; // OSK decimals
         const BigNumber = window.tronWeb.BigNumber;
 
