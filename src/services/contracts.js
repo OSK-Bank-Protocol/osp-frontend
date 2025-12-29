@@ -149,7 +149,7 @@ const contractAddresses = {
     development: 'TN5Yzxk9nZkv62Jjk9THJ7zBqa6rTDm2eE',
   },
   dynamicConfig: {
-    production: '', // Pending PROD address
+    production: 'TFwe2SavtFzHhkmcXYpq1sFFU1Nm8Mev8S',
     development: 'TQhbRrap82Ci8Cp3Hcw1xC1gUA3uQxZNQ9',
   }
 };
