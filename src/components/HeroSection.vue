@@ -14,9 +14,15 @@
                 
                 <!-- Inject Pool Button Moved Here -->
                 <div class="hero-action-wrapper">
-                    <button @click.prevent="handleInjectPoolClick" class="action-btn primary-btn hero-main-btn">
+                    <button @click.prevent="handleInjectPoolClick" class="action-btn primary-btn hero-main-btn osk-btn">
                         <i class="icon-plus"></i>
                         <span>{{ t('hero.injectPool') }}</span>
+                        <div class="btn-shine"></div>
+                    </button>
+
+                    <button @click.prevent="handleSwapClick" class="action-btn primary-btn hero-main-btn osk-btn">
+                        <i class="icon-plus"></i>
+                        <span>{{ t('hero.swap') }}</span>
                         <div class="btn-shine"></div>
                     </button>
                 </div>
@@ -225,6 +231,17 @@ const handleInjectPoolClick = () => {
   emits('open-inject-modal');
 };
 
+const handleSwapClick = () => {
+  const url = 'https://www.pgglobal.io/swap';
+  // Try to open in new tab (popup)
+  const newWindow = window.open(url, '_blank');
+  
+  // If popup blocked or failed (common in in-app browsers/wallets), redirect
+  if (!newWindow || newWindow.closed || typeof newWindow.closed === 'undefined') {
+    window.location.href = url;
+  }
+};
+
 const shareFriendLink = async () => {
   if (!isAuthenticated.value) {
     showToast(t('toast.connectWalletFirst'));
@@ -293,6 +310,10 @@ onUnmounted(() => {
 </script>
 
 <style scoped lang="scss">
+.osk-btn {
+    min-width: 90% !important;
+}
+
 .hero-section {
     position: relative;
     min-height: 100vh;
@@ -494,6 +515,9 @@ onUnmounted(() => {
 /* Main Action Button - Hand-drawn Circle */
 .hero-action-wrapper {
     display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 20px;
     justify-content: center;
     margin-top: 100px !important;
 }
