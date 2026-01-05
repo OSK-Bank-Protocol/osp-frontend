@@ -137,6 +137,7 @@ const languagePacks = {
     'toast.fetchReferrerFailed': '错误：无法获取您已绑定的推荐人地址。',
     'toast.stake200Tokens': '需至少质押 3 TOKEN',
     'toast.highStakingVolume': '当前质押量较大，请稍后再试',
+    'toast.notYetOpen': '尚未开放',
     
     // Queue Modal
     'queue.applying': '正在申请进入质押队列，请稍等',
@@ -381,6 +382,7 @@ const languagePacks = {
     'toast.fetchReferrerFailed': '錯誤：無法獲取您已綁定的推薦人地址。',
     'toast.stake200Tokens': '需至少質押 3 TOKEN',
     'toast.highStakingVolume': '當前質押量較大，請稍後再試',
+    'toast.notYetOpen': '尚未開放',
     
     // Queue Modal
     'queue.applying': '正在申請進入質押隊列，請稍等',
@@ -576,6 +578,7 @@ const languagePacks = {
     'toast.fetchReferrerFailed': 'Error: Could not retrieve your bound referrer address.',
     'toast.stake200Tokens': 'Requires a stake of at least 3 TOKENs',
     'toast.highStakingVolume': 'High staking volume, please try again later',
+    'toast.notYetOpen': 'Not yet open',
     
     // Queue Modal
     'queue.applying': 'Applying to enter the staking queue, please wait',
@@ -770,6 +773,7 @@ const languagePacks = {
     'toast.fetchReferrerFailed': 'エラー: 紐付けられた紹介者アドレスを取得できませんでした。',
     'toast.stake200Tokens': '最低でも3 TOKENのステークが必要です',
     'toast.highStakingVolume': '現在ステーキング量が多いため、後でもう一度お試しください',
+    'toast.notYetOpen': 'まだ公開されていません',
     
     // Queue Modal
     'queue.applying': 'ステーキングキューへの参加を申請中、お待ちください',
@@ -965,6 +969,7 @@ const languagePacks = {
     'toast.fetchReferrerFailed': '오류: 연결된 추천인 주소를 가져올 수 없습니다.',
     'toast.stake200Tokens': '최소 3 TOKEN의 스테이킹이 필요합니다',
     'toast.highStakingVolume': '현재 스테이킹 양이 많습니다. 잠시 후 다시 시도해 주세요',
+    'toast.notYetOpen': '아직 오픈되지 않았습니다',
     
     // Queue Modal
     'queue.applying': '스테이킹 대기열 진입 신청 중, 잠시만 기다려 주세요',

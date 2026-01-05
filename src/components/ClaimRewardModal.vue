@@ -69,8 +69,7 @@
                     </div>
                     <button 
                         @click="claimNodeReward" 
-                        :disabled="parseFloat(node_rewards) <= 0 || isClaimingNodeReward" 
-                        class="action-btn primary-btn full-width"
+                        class="action-btn primary-btn full-width is-disabled"
                     >
                         {{ isClaimingNodeReward ? t('claim.claiming') : t('claim.claim') }}
                     </button>
@@ -267,6 +266,11 @@ const claim = async (level) => {
 };
 
 const claimNodeReward = async () => {
+    // Temporary disable Node Reward
+    showToast(t('toast.notYetOpen'));
+    return;
+
+    /* Original logic commented out for temporary disable
     if (!isPreacher.value) {
         showToast(t('toast.stake200Tokens'));
         return;
@@ -288,6 +292,7 @@ const claimNodeReward = async () => {
     } finally {
         isClaimingNodeReward.value = false;
     }
+    */
 };
 
 const claimDividendReward = async () => {
@@ -655,7 +660,8 @@ watch(() => walletState.isAuthenticated, (isAuth) => {
             transform: rotate(1deg);
         }
         
-        &:disabled {
+        &:disabled,
+        &.is-disabled {
             border-color: rgba(255, 255, 255, 0.1);
             color: var(--text-muted);
             cursor: not-allowed;
