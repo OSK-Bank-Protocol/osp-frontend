@@ -55,7 +55,7 @@ export const SINGLE_PURCHASE_LIMIT = 0.5;
 /**
  * Enable staking queue frequency control
  */
-export const ENABLE_STAKING_QUEUE = true;
+export const ENABLE_STAKING_QUEUE = false;
 
 /**
  * Disable console logs in production
