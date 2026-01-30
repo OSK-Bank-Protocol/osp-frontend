@@ -33,6 +33,9 @@
     <transition name="modal">
       <LanguageModal v-if="isLanguageModalVisible" @close="closeLanguageModal" />
     </transition>
+    <transition name="modal">
+      <NewVersionModal v-if="isNewVersionModalVisible" @close="closeNewVersionModal" />
+    </transition>
   </div>
 </template>
 
@@ -43,6 +46,7 @@ import GoTop from './components/GoTop.vue';
 import MobileMenu from './components/MobileMenu.vue';
 import ConnectWalletModal from './components/ConnectWalletModal.vue';
 import LanguageModal from './components/LanguageModal.vue';
+import NewVersionModal from './components/NewVersionModal.vue';
 import { autoConnectWallet } from './services/wallet.js';
 import ToastNotification from './components/ToastNotification.vue';
 import { initializeLanguage } from './i18n';
@@ -56,12 +60,14 @@ export default {
     MobileMenu,
     ConnectWalletModal,
     LanguageModal,
-    ToastNotification
+    ToastNotification,
+    NewVersionModal
   },
   data() {
     return {
       isModalVisible: false,
       isLanguageModalVisible: false,
+      isNewVersionModalVisible: true,
     };
   },
   methods: {
@@ -76,6 +82,9 @@ export default {
     },
     closeLanguageModal() {
       this.isLanguageModalVisible = false;
+    },
+    closeNewVersionModal() {
+      this.isNewVersionModalVisible = false;
     }
   },
   mounted() {
